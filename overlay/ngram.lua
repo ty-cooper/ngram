@@ -292,28 +292,69 @@ local function showCapturePicker()
     chooser:show()
 end
 
+-- Global hotkeys (always active)
 hs.hotkey.bind({"cmd", "shift"}, "N", function()
-    if captureSession then
-        -- Already in a session, don't open picker.
-        return
-    end
+    if captureSession then return end
     showCapturePicker()
 end)
 hs.hotkey.bind({"cmd", "shift"}, "M", startTextNote)
 hs.hotkey.bind({"cmd", "shift"}, "S", quickScreenshot)
 
--- Session keybindings (active during mixed-media session)
-hs.hotkey.bind({"cmd"}, "S", function()
-    if captureSession then captureScreenshot() end
-end)
-hs.hotkey.bind({"cmd"}, "return", function()
-    if captureSession then finishSession()
-    elseif overlay then saveTextNote(textBuffer) end
-end)
-hs.hotkey.bind({}, "escape", function()
-    if captureSession then abortSession()
-    elseif overlay then hideOverlay() end
-end)
+-- Session-scoped hotkeys (only active during capture)
+local sessionKeys = {}
+
+local function enableSessionKeys()
+    sessionKeys = {
+        hs.hotkey.new({"cmd"}, "S", function()
+            if captureSession then captureScreenshot() end
+        end),
+        hs.hotkey.new({"cmd"}, "return", function()
+            if captureSession then finishSession()
+            elseif overlay then saveTextNote(textBuffer) end
+        end),
+        hs.hotkey.new({}, "escape", function()
+            if captureSession then abortSession()
+            elseif overlay then hideOverlay() end
+        end),
+    }
+    for _, k in ipairs(sessionKeys) do k:enable() end
+end
+
+local function disableSessionKeys()
+    for _, k in ipairs(sessionKeys) do k:disable() end
+    sessionKeys = {}
+end
+
+-- Hook into session start/end
+local _origStartMixed = startMixedSession
+startMixedSession = function()
+    _origStartMixed()
+    enableSessionKeys()
+end
+
+local _origStartText = startTextNote
+startTextNote = function()
+    _origStartText()
+    enableSessionKeys()
+end
+
+local _origFinish = finishSession
+finishSession = function()
+    disableSessionKeys()
+    _origFinish()
+end
+
+local _origAbort = abortSession
+abortSession = function()
+    disableSessionKeys()
+    _origAbort()
+end
+
+local _origHide = hideOverlay
+hideOverlay = function()
+    disableSessionKeys()
+    _origHide()
+end
 
 ----------------------------------------------------------------------
 -- Module
