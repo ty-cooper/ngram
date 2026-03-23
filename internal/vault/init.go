@@ -18,8 +18,6 @@ var vaultDirs = []string{
 	"knowledge",
 	"boxes",
 	"tools",
-	"creds",
-	"reports",
 }
 
 // Init creates the full vault directory structure and seed files.

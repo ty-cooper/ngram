@@ -48,13 +48,17 @@ const StructuredNoteSchema = `{
 func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string) string {
 	var b strings.Builder
 
-	b.WriteString("OUTPUT ONLY THE JSON OBJECT. NO COMMENTARY. NO EXPLANATION. NO PREAMBLE.\n\n")
-	b.WriteString("Structure the following raw note into a clean, atomic knowledge note.\n\n")
+	b.WriteString("You receive a raw note or screenshot. Make sense of what the user was attempting to say. ")
+	b.WriteString("Add missing context ONLY if that context is crucial to understanding the note. ")
+	b.WriteString("Keep the note atomic. Use web search if you need context to accurately structure the content.\n\n")
+
+	b.WriteString("Output ONLY the JSON note object. No commentary. No explanation. No preamble. No markdown fences.\n\n")
 
 	b.WriteString("WRITING RULES (non negotiable):\n")
-	b.WriteString("- Zero personality. Declarative voice. Present tense. Active voice.\n")
-	b.WriteString("- No hyphens or em dashes anywhere in the output.\n")
-	b.WriteString("- No filler words: basically, essentially, actually, interestingly, in order to, simply, just, really, important, key, crucial, significant.\n")
+	b.WriteString("- Google developer documentation style.\n")
+	b.WriteString("- Declarative voice. Present tense. Active voice.\n")
+	b.WriteString("- No em dashes anywhere in the output.\n")
+	b.WriteString("- No filler: basically, essentially, actually, interestingly, in order to, simply, just, really, important, key, crucial, significant.\n")
 	b.WriteString("- No weak starters: \"It is\", \"There are\", \"There is\", \"This is\", \"Note that\".\n")
 	b.WriteString("- Minimum words for maximum information transfer.\n")
 	b.WriteString("- One concept per sentence. One topic per paragraph.\n")
@@ -77,8 +81,6 @@ func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string) string {
 	b.WriteString("- log: engagement logs, command output, findings (not quizzed)\n")
 	b.WriteString("- link: saved URLs with description (not quizzed)\n")
 	b.WriteString("- media: screenshots, images with description (not quizzed)\n\n")
-
-	b.WriteString("Output ONLY the JSON object. No markdown fences. No explanation. No text before or after the JSON.\n\n")
 
 	b.WriteString("RAW NOTE:\n")
 	b.WriteString(rawContent)
