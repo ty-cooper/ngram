@@ -81,13 +81,13 @@ func newRun(cmd *cobra.Command, args []string) error {
 	}
 	fm.WriteString("source: \"cli-editor\"\n")
 	fm.WriteString("capture_mode: \"editor\"\n")
-	if boxrc.Box != "" {
+	if boxrc != nil && boxrc.Box != "" {
 		fmt.Fprintf(&fm, "box: %q\n", boxrc.Box)
 	}
-	if boxrc.Phase != "" {
+	if boxrc != nil && boxrc.Phase != "" {
 		fmt.Fprintf(&fm, "phase: %q\n", boxrc.Phase)
 	}
-	if boxrc.IP != "" {
+	if boxrc != nil && boxrc.IP != "" {
 		fmt.Fprintf(&fm, "ip: %q\n", boxrc.IP)
 	}
 	fm.WriteString("---\n\n")
