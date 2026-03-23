@@ -91,7 +91,13 @@ func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]b
 }
 
 func (r *Runner) buildClaudeArgs(prompt string, cfg *runConfig) []string {
-	args := []string{"-p", prompt, "--output-format", "json"}
+	// Use --output-format text when --json-schema is set so we get
+	// the raw JSON response, not the Claude Code metadata envelope.
+	outputFormat := "json"
+	if cfg.jsonSchema != "" {
+		outputFormat = "text"
+	}
+	args := []string{"-p", prompt, "--output-format", outputFormat}
 	if cfg.systemPrompt != "" {
 		args = append(args, "--system-prompt", cfg.systemPrompt)
 	}
