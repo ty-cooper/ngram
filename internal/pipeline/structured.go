@@ -43,16 +43,40 @@ func ParseStructuredJSON(data []byte) (*StructuredNote, error) {
 	if err := json.Unmarshal(data, &note); err != nil {
 		return nil, fmt.Errorf("parse structured json: %w", err)
 	}
-	if note.Title == "" {
-		return nil, fmt.Errorf("structured note missing title")
+	if note.Body == "" && note.Title == "" {
+		return nil, fmt.Errorf("structured note: empty response from LLM")
 	}
+	// If no title, derive from body (first 60 chars).
+	if note.Title == "" {
+		note.Title = deriveTitle(note.Body)
+	}
+	// If no body, use the title as body.
 	if note.Body == "" {
-		return nil, fmt.Errorf("structured note missing body")
+		note.Body = note.Title
 	}
 	if note.ContentType == "" {
 		note.ContentType = "knowledge"
 	}
 	return &note, nil
+}
+
+// deriveTitle creates a title from body content.
+func deriveTitle(body string) string {
+	// Take first line or first 60 chars.
+	line := body
+	if idx := strings.IndexByte(body, '\n'); idx > 0 {
+		line = body[:idx]
+	}
+	line = strings.TrimSpace(line)
+	if len(line) > 60 {
+		// Cut at last space before 60.
+		if i := strings.LastIndex(line[:60], " "); i > 0 {
+			line = line[:i]
+		} else {
+			line = line[:60]
+		}
+	}
+	return line
 }
 
 // BuildFrontmatter generates the full COO-83 YAML frontmatter for a ProcessedNote.

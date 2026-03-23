@@ -44,7 +44,7 @@ func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string) string {
 	b.WriteString("Return ONLY valid JSON matching this schema:\n")
 	b.WriteString("```json\n")
 	b.WriteString(`{
-  "title": "concise descriptive title",
+  "title": "concise descriptive title (generate from content, never empty)",
   "summary": "one line, under 120 chars",
   "body": "structured markdown content",
   "content_type": "knowledge|reference|log|link|media",
