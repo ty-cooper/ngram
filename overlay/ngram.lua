@@ -292,13 +292,11 @@ local function showCapturePicker()
     chooser:show()
 end
 
--- Global hotkeys (always active)
+-- Single global hotkey — opens capture picker
 hs.hotkey.bind({"cmd", "shift"}, "N", function()
     if captureSession then return end
     showCapturePicker()
 end)
-hs.hotkey.bind({"cmd", "shift"}, "M", startTextNote)
-hs.hotkey.bind({"cmd", "shift"}, "S", quickScreenshot)
 
 -- Session-scoped hotkeys (only active during capture)
 local sessionKeys = {}
