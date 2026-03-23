@@ -113,13 +113,16 @@ func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]b
 	// Add text prompt.
 	contentBlocks = append(contentBlocks, anthropic.NewTextBlock(prompt))
 
-	// Build params.
+	// Build messages. Prefill assistant response with "{" to force JSON output.
+	messages := []anthropic.MessageParam{
+		anthropic.NewUserMessage(contentBlocks...),
+		anthropic.NewAssistantMessage(anthropic.NewTextBlock("{")),
+	}
+
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.ModelClaudeSonnet4_6,
 		MaxTokens: int64(cfg.maxTokens),
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(contentBlocks...),
-		},
+		Messages:  messages,
 	}
 
 	if cfg.systemPrompt != "" {
@@ -133,8 +136,9 @@ func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]b
 		return nil, fmt.Errorf("anthropic api: %w", err)
 	}
 
-	// Extract text from response.
+	// Extract text from response. Prepend "{" since we prefilled the assistant.
 	var result strings.Builder
+	result.WriteString("{")
 	for _, block := range msg.Content {
 		if block.Type == "text" {
 			result.WriteString(block.Text)
@@ -142,7 +146,7 @@ func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]b
 	}
 
 	text := strings.TrimSpace(result.String())
-	if text == "" {
+	if text == "{" || text == "" {
 		return nil, fmt.Errorf("anthropic api: empty response (stop_reason: %s)", msg.StopReason)
 	}
 
