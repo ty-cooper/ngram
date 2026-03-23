@@ -204,8 +204,32 @@ func IsRunning(vaultPath string) (bool, *Heartbeat) {
 	return true, hb
 }
 
+// EnsureComposeFile writes docker-compose.yml to the vault if it doesn't exist.
+func EnsureComposeFile(vaultPath string) {
+	path := filepath.Join(vaultPath, "docker-compose.yml")
+	if _, err := os.Stat(path); err == nil {
+		return
+	}
+	content := `services:
+  meilisearch:
+    image: getmeili/meilisearch:v1.40.0
+    ports:
+      - "127.0.0.1:7700:7700"
+    volumes:
+      - meilisearch_data:/meili_data
+    environment:
+      - MEILI_NO_ANALYTICS=true
+      - MEILI_ENV=development
+
+volumes:
+  meilisearch_data:
+`
+	os.WriteFile(path, []byte(content), 0o644)
+}
+
 // StartMeilisearch runs docker compose up -d and waits for health.
 func StartMeilisearch(vaultPath string) error {
+	EnsureComposeFile(vaultPath)
 	cmd := exec.Command("docker", "compose", "up", "-d")
 	cmd.Dir = vaultPath
 	cmd.Stdout = os.Stdout

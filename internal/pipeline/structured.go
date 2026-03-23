@@ -38,7 +38,27 @@ func GenerateID() string {
 }
 
 // ParseStructuredJSON parses Claude's JSON response into a StructuredNote.
+// Handles both raw JSON and the Claude Code envelope {"type":"result","result":"..."}.
 func ParseStructuredJSON(data []byte) (*StructuredNote, error) {
+	data = stripCodeFences(data)
+
+	// Check if this is a Claude Code envelope.
+	var envelope struct {
+		Type   string          `json:"type"`
+		Result json.RawMessage `json:"result"`
+	}
+	if err := json.Unmarshal(data, &envelope); err == nil && envelope.Type == "result" && len(envelope.Result) > 0 {
+		// Result may be a JSON string or a JSON object.
+		var resultStr string
+		if err := json.Unmarshal(envelope.Result, &resultStr); err == nil {
+			// It's a string — parse the inner JSON.
+			data = stripCodeFences([]byte(resultStr))
+		} else {
+			// It's already a JSON object.
+			data = []byte(envelope.Result)
+		}
+	}
+
 	var note StructuredNote
 	if err := json.Unmarshal(data, &note); err != nil {
 		return nil, fmt.Errorf("parse structured json: %w", err)
