@@ -17,14 +17,14 @@ A personal knowledge engine built on Obsidian markdown files, powered by a singl
 | LLM | Claude Code CLI (`claude -p`) | All AI calls shell out to the `claude` binary via `os/exec`. No direct Anthropic API HTTP calls. Claude Code handles auth, retries, model selection. |
 | Screenshot text | Claude vision | Screenshots sent as images to Claude. No OCR library. |
 | iMessage | BlueBubbles REST API (production) / AppleScript (MVP) | Quiz delivery to your phone. Swappable via interface. |
-| Capture overlay | Hammerspoon (MVP) / Swift NSPanel (production) | Global hotkeys from any window. |
+| Capture overlay | SwiftUI menu bar app (NgramCapture) | Global hotkey (Cmd+Shift+N), floating panels. |
 | Notes viewer | Obsidian | Markdown rendering, graph view, plugins. |
 | Version control | Git | Auto-commit on every vault change. Hourly push to private GitHub repo. |
 | Data format | Markdown + YAML frontmatter | Human-readable, portable, grep-friendly. |
 
 ## Two-Repo Architecture
 
-**`ngram` repo (this repo):** Go source code for the `n` binary, Docker Compose config for Meilisearch, Hammerspoon scripts, structuring prompts, quality gate prompts, seed taxonomy, note templates, build scripts.
+**`ngram` repo (this repo):** Go source code for the `n` binary, Docker Compose config for Meilisearch, SwiftUI capture overlay (NgramCapture), structuring prompts, quality gate prompts, seed taxonomy, note templates, build scripts.
 
 **Vault repo (always private):** User data. `_inbox/`, `_archive/`, `_meta/`, `knowledge/`, `boxes/`, `tools/`. This is what Obsidian opens. This is what gets hourly git pushes.
 

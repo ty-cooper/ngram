@@ -1,0 +1,54 @@
+{
+  "": {
+    "swift-dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/master.swiftdeps"
+  },
+  "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/AppDelegate.swift": {
+    "dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/AppDelegate.d",
+    "object": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/AppDelegate.swift.o",
+    "swiftmodule": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/AppDelegate~partial.swiftmodule",
+    "swift-dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/AppDelegate.swiftdeps",
+    "diagnostics": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/AppDelegate.dia"
+  },
+  "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/CapturePickerView.swift": {
+    "dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CapturePickerView.d",
+    "object": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CapturePickerView.swift.o",
+    "swiftmodule": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CapturePickerView~partial.swiftmodule",
+    "swift-dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CapturePickerView.swiftdeps",
+    "diagnostics": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CapturePickerView.dia"
+  },
+  "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/CaptureSessionManager.swift": {
+    "dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CaptureSessionManager.d",
+    "object": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CaptureSessionManager.swift.o",
+    "swiftmodule": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CaptureSessionManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CaptureSessionManager.swiftdeps",
+    "diagnostics": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CaptureSessionManager.dia"
+  },
+  "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/MixedSessionView.swift": {
+    "dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/MixedSessionView.d",
+    "object": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/MixedSessionView.swift.o",
+    "swiftmodule": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/MixedSessionView~partial.swiftmodule",
+    "swift-dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/MixedSessionView.swiftdeps",
+    "diagnostics": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/MixedSessionView.dia"
+  },
+  "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/NgramCaptureApp.swift": {
+    "dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/NgramCaptureApp.d",
+    "object": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/NgramCaptureApp.swift.o",
+    "swiftmodule": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/NgramCaptureApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/NgramCaptureApp.swiftdeps",
+    "diagnostics": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/NgramCaptureApp.dia"
+  },
+  "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/TextNoteView.swift": {
+    "dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/TextNoteView.d",
+    "object": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/TextNoteView.swift.o",
+    "swiftmodule": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/TextNoteView~partial.swiftmodule",
+    "swift-dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/TextNoteView.swiftdeps",
+    "diagnostics": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/TextNoteView.dia"
+  },
+  "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/VaultConfig.swift": {
+    "dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/VaultConfig.d",
+    "object": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/VaultConfig.swift.o",
+    "swiftmodule": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/VaultConfig~partial.swiftmodule",
+    "swift-dependencies": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/VaultConfig.swiftdeps",
+    "diagnostics": "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/VaultConfig.dia"
+  }
+}

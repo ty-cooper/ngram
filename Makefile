@@ -2,13 +2,18 @@ BINARY = n
 BUILD_DIR = bin
 PLATFORMS = darwin/amd64 darwin/arm64 linux/amd64 linux/arm64
 
-.PHONY: build install test lint release clean
+.PHONY: build install test lint release clean overlay
 
 build:
 	go build -o $(BUILD_DIR)/$(BINARY) ./cmd/n
 
 install:
 	go install ./cmd/n
+
+overlay:
+	cd overlay/NgramCapture && swift build -c release
+	cp overlay/NgramCapture/.build/release/NgramCapture $(BUILD_DIR)/NgramCapture
+	@echo "Built $(BUILD_DIR)/NgramCapture — run it or add to Login Items"
 
 test:
 	go test ./...

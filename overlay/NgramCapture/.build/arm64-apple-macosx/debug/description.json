@@ -1,0 +1,377 @@
+{
+  "builtTestProducts" : [
+
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.NgramCapture-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/sources",
+      "importPath" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/AppDelegate.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/CapturePickerView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/CaptureSessionManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/MixedSessionView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/NgramCaptureApp.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/TextNoteView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/VaultConfig.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/sources"
+        }
+      ],
+      "isLibrary" : false,
+      "moduleName" : "NgramCapture",
+      "moduleOutputPath" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/Modules/NgramCapture.swiftmodule",
+      "objects" : [
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/AppDelegate.swift.o",
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CapturePickerView.swift.o",
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CaptureSessionManager.swift.o",
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/MixedSessionView.swift.o",
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/NgramCaptureApp.swift.o",
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/TextNoteView.swift.o",
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/VaultConfig.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx13.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j16",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "NgramCapture_main",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "ngramcapture"
+      ],
+      "outputFileMapPath" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/AppDelegate.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CapturePickerView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CaptureSessionManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/MixedSessionView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/NgramCaptureApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/TextNoteView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/VaultConfig.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/Modules/NgramCapture.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/AppDelegate.swift",
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/CapturePickerView.swift",
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/CaptureSessionManager.swift",
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/MixedSessionView.swift",
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/NgramCaptureApp.swift",
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/TextNoteView.swift",
+        "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/VaultConfig.swift"
+      ],
+      "tempsPath" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "NgramCapture" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "NgramCapture",
+      "-package-name",
+      "ngramcapture",
+      "-c",
+      "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/AppDelegate.swift",
+      "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/CapturePickerView.swift",
+      "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/CaptureSessionManager.swift",
+      "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/MixedSessionView.swift",
+      "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/NgramCaptureApp.swift",
+      "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/TextNoteView.swift",
+      "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/VaultConfig.swift",
+      "-I",
+      "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx13.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j16",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "NgramCapture_main",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "ngramcapture",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "NgramCapture" : [
+
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture-entitlement.plist" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<entitlement-plist>"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<com.apple.security.get-task-allow>"
+        }
+      ],
+      "outputFilePath" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture-entitlement.plist"
+    },
+    "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/AppDelegate.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/CapturePickerView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/CaptureSessionManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/MixedSessionView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/NgramCaptureApp.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/TextNoteView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/NgramCapture/VaultConfig.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/sources"
+    },
+    "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/AppDelegate.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CapturePickerView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/CaptureSessionManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/MixedSessionView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/NgramCaptureApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/TextNoteView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.build/VaultConfig.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/NgramCapture.product/Objects.LinkFileList"
+    },
+    "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/tyler.cooper/Developer/personal/ngram/overlay/NgramCapture/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}

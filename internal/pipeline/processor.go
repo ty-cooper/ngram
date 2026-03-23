@@ -185,6 +185,7 @@ func (p *Processor) structureWithRetry(ctx context.Context, rawBody string, maxR
 		if err != nil {
 			if attempt < maxRetries {
 				log.Printf("warn: parse failed (attempt %d), retrying: %v", attempt+1, err)
+				log.Printf("debug: raw output (%d bytes): %s", len(out), truncate(string(out), 500))
 				continue
 			}
 			return nil, fmt.Errorf("parse after %d attempts: %w", attempt+1, err)
@@ -283,6 +284,13 @@ func (p *Processor) logUsage(noteID, component string, durationMs int64) {
 	defer f.Close()
 	f.Write(data)
 	f.Write([]byte("\n"))
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
 }
 
 // atomicWrite writes content to a file atomically via temp file + rename.
