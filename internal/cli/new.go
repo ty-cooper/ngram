@@ -104,11 +104,11 @@ func newRun(cmd *cobra.Command, args []string) error {
 	}
 
 	relPath := filepath.Join("_inbox", filename)
-	context := ""
-	if boxrc.Box != "" {
-		context = fmt.Sprintf(" [%s/%s]", boxrc.Box, boxrc.Phase)
+	ctx := ""
+	if boxrc != nil && boxrc.Box != "" {
+		ctx = fmt.Sprintf(" [%s/%s]", boxrc.Box, boxrc.Phase)
 	}
-	fmt.Printf("✓ %s%s\n", relPath, context)
+	fmt.Printf("✓ %s%s\n", relPath, ctx)
 	return nil
 }
 

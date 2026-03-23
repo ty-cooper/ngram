@@ -52,13 +52,18 @@ func ssRun(cmd *cobra.Command, args []string) error {
 
 	// Write manifest.yml for the processor to detect as a capture bundle.
 	boxrc, _ := config.FindBoxRC("")
+	box, phase := "", ""
+	if boxrc != nil {
+		box = boxrc.Box
+		phase = boxrc.Phase
+	}
 	manifest := fmt.Sprintf(`items:
   - type: image
     path: capture.png
 box: %q
 phase: %q
 source: screenshot
-`, boxrc.Box, boxrc.Phase)
+`, box, phase)
 
 	manifestPath := filepath.Join(bundleDir, "manifest.yml")
 	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
