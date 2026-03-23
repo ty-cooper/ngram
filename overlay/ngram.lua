@@ -234,7 +234,7 @@ function buildOverlayHTML(boxrc)
     .footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 12px 16px; background: #0a0a1a; color: #888; font-size: 12px; }
     </style></head><body>
     ]] .. items_html .. [[
-    <div class="footer">[S] screenshot  [Enter] add text  [Z] finish  [Esc] abort</div>
+    <div class="footer">[Cmd+S] screenshot  [Enter] add text  [Cmd+Enter] finish  [Esc] abort</div>
     </body></html>
     ]]
 end
@@ -247,7 +247,7 @@ function buildTextOverlayHTML(boxrc)
     .footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 12px 16px; background: #0a0a1a; color: #888; font-size: 12px; }
     </style></head><body>
     <textarea id="note" autofocus placeholder="Type your note..."></textarea>
-    <div class="footer">[Cmd+Enter] save  [Esc] abort</div>
+    <div class="footer">[Cmd+Enter] save  [Cmd+S] screenshot  [Esc] abort</div>
     </body></html>
     ]]
 end
@@ -303,11 +303,12 @@ hs.hotkey.bind({"cmd", "shift"}, "M", startTextNote)
 hs.hotkey.bind({"cmd", "shift"}, "S", quickScreenshot)
 
 -- Session keybindings (active during mixed-media session)
-hs.hotkey.bind({}, "S", function()
-    if captureSession and textBuffer == "" then captureScreenshot() end
+hs.hotkey.bind({"cmd"}, "S", function()
+    if captureSession then captureScreenshot() end
 end)
-hs.hotkey.bind({}, "Z", function()
-    if captureSession and textBuffer == "" then finishSession() end
+hs.hotkey.bind({"cmd"}, "return", function()
+    if captureSession then finishSession()
+    elseif overlay then saveTextNote(textBuffer) end
 end)
 hs.hotkey.bind({}, "escape", function()
     if captureSession then abortSession()
