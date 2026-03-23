@@ -138,8 +138,9 @@ func (s *Scheduler) sendQuestion(idx int) {
 	}
 
 	entry := &s.state.Schedule[idx]
-	question := fmt.Sprintf("Ngram Quiz\n[%s]\n\nExplain the key concepts from this note.\n\nReply with your answer. Skip: reply \"skip\"",
-		filepath.Base(entry.NotePath))
+	qID := fmt.Sprintf("Q%d", idx+1)
+	question := fmt.Sprintf("Ngram Quiz [%s]\n[%s]\n\nExplain the key concepts from this note.\n\nReply with your answer (prefix %s to target this question). Skip: reply \"skip\"",
+		qID, filepath.Base(entry.NotePath), qID)
 
 	if err := s.Bridge.Send(s.Phone, question); err != nil {
 		log.Printf("warn: send quiz: %v", err)
@@ -176,6 +177,11 @@ func (s *Scheduler) handleReply(msg IncomingMessage) {
 		s.clearOldestPending()
 		s.Bridge.Send(s.Phone, "No worries. Review the note when you can.")
 		return
+	case "defer":
+		// Remove from today without grading (COO-94).
+		s.clearOldestPending()
+		s.Bridge.Send(s.Phone, "Deferred to tomorrow. No grade recorded.")
+		return
 	case "pause":
 		s.Bridge.Send(s.Phone, "Quizzes paused for today.")
 		return
@@ -187,13 +193,66 @@ func (s *Scheduler) handleReply(msg IncomingMessage) {
 			s.state.CompletedToday, s.state.SkippedToday, s.state.TimedOutToday)
 		s.Bridge.Send(s.Phone, stats)
 		return
+	case "missed":
+		// Send the notes that were timed out or skipped today.
+		var missed []string
+		for _, entry := range s.state.Schedule {
+			if entry.Sent {
+				if _, pending := s.state.Pending[entry.NotePath]; !pending {
+					missed = append(missed, filepath.Base(entry.NotePath))
+				}
+			}
+		}
+		if len(missed) == 0 {
+			s.Bridge.Send(s.Phone, "No missed questions today.")
+		} else {
+			s.Bridge.Send(s.Phone, fmt.Sprintf("Missed today:\n%s", strings.Join(missed, "\n")))
+		}
+		return
+	case "review":
+		// Send a compact summary of today's lapsed notes.
+		var lapsed []string
+		for _, entry := range s.state.Schedule {
+			lapsed = append(lapsed, filepath.Base(entry.NotePath))
+		}
+		if len(lapsed) == 0 {
+			s.Bridge.Send(s.Phone, "Nothing to review today.")
+		} else {
+			s.Bridge.Send(s.Phone, fmt.Sprintf("Review these notes:\n%s", strings.Join(lapsed, "\n")))
+		}
+		return
 	}
 
-	// Handle as quiz answer (FIFO — oldest pending).
+	// Check for question ID prefix (e.g., "Q2 my answer here").
+	// If present, match to that specific question instead of FIFO.
+	if strings.HasPrefix(strings.ToUpper(body), "Q") && len(body) > 1 {
+		// Try to extract Qn prefix.
+		parts := strings.SplitN(body, " ", 2)
+		if len(parts) == 2 {
+			qPrefix := strings.ToUpper(parts[0])
+			if len(qPrefix) >= 2 && qPrefix[0] == 'Q' {
+				// Match against schedule index.
+				var qIdx int
+				if _, err := fmt.Sscanf(qPrefix, "Q%d", &qIdx); err == nil && qIdx > 0 {
+					qIdx-- // 1-indexed to 0-indexed
+					if qIdx < len(s.state.Schedule) {
+						target := s.state.Schedule[qIdx].NotePath
+						if _, exists := s.state.Pending[target]; exists {
+							s.state.CompletedToday++
+							delete(s.state.Pending, target)
+							s.Bridge.Send(s.Phone, fmt.Sprintf("Received [%s]. Grading...", qPrefix))
+							return
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Default: FIFO — oldest pending.
 	if len(s.state.Pending) > 0 {
 		s.state.CompletedToday++
 		s.clearOldestPending()
-		// Grading happens asynchronously; send ack immediately.
 		s.Bridge.Send(s.Phone, "Received. Grading...")
 	}
 }

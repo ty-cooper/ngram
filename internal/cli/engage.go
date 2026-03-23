@@ -43,6 +43,9 @@ func engageRun(cmd *cobra.Command, args []string) error {
 		fmt.Printf("✓ engagement mode: %s (quizzes paused)\n", name)
 	}
 
+	// Suggest shell prompt integration.
+	fmt.Printf("\n  To show in your prompt: export NGRAM_ENGAGEMENT=%s\n", name)
+
 	return nil
 }
 

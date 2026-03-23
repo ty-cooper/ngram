@@ -269,7 +269,36 @@ end
 -- Hotkey Bindings
 ----------------------------------------------------------------------
 
-hs.hotkey.bind({"cmd", "shift"}, "N", startMixedSession)
+-- Unified capture panel (Cmd+Shift+N) — shows mode picker.
+-- Direct shortcuts preserved for power users.
+local function showCapturePicker()
+    local choices = {
+        {text = "[N] Mixed-media session (screenshots + text)", subText = "Cmd+Shift+N again to skip picker"},
+        {text = "[M] Text-only note", subText = "Quick brain dump"},
+        {text = "[S] Quick screenshot", subText = "Region select, fire and forget"},
+    }
+    local chooser = hs.chooser.new(function(choice)
+        if not choice then return end
+        local idx = choice.idx
+        if idx == 1 then startMixedSession()
+        elseif idx == 2 then startTextNote()
+        elseif idx == 3 then quickScreenshot()
+        end
+    end)
+    for i, c in ipairs(choices) do
+        choices[i] = {text = c.text, subText = c.subText, idx = i}
+    end
+    chooser:choices(choices)
+    chooser:show()
+end
+
+hs.hotkey.bind({"cmd", "shift"}, "N", function()
+    if captureSession then
+        -- Already in a session, don't open picker.
+        return
+    end
+    showCapturePicker()
+end)
 hs.hotkey.bind({"cmd", "shift"}, "M", startTextNote)
 hs.hotkey.bind({"cmd", "shift"}, "S", quickScreenshot)
 

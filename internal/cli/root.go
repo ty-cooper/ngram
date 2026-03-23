@@ -55,6 +55,9 @@ func init() {
 	rootCmd.AddCommand(captureOffCmd)
 	rootCmd.AddCommand(reportCmd)
 	rootCmd.AddCommand(verifyCmd)
+	rootCmd.AddCommand(amendCmd)
+	rootCmd.AddCommand(editCmd)
+	rootCmd.AddCommand(domainsCmd)
 }
 
 func Execute() error {

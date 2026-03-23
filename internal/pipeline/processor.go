@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/tylercooper/ngram/internal/llm"
+	"github.com/tylercooper/ngram/internal/notify"
 	"github.com/tylercooper/ngram/internal/search"
 	"github.com/tylercooper/ngram/internal/taxonomy"
 	"github.com/tylercooper/ngram/internal/vault"
@@ -135,7 +136,10 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 		}
 	}
 
-	// 11. Git commit.
+	// 11. Desktop notification.
+	notify.Send("Ngram", fmt.Sprintf("Structured: %s → %s", processed.Title, relPath))
+
+	// 12. Git commit.
 	p.gitCommit(relPath, processed.ID, source)
 
 	// 12. Archive raw.
