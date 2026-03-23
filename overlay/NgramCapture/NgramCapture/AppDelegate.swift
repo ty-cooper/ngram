@@ -163,7 +163,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 source: screenshot
                 """
                 try? manifest.write(toFile: "\(bundleDir)/manifest.yml", atomically: true, encoding: .utf8)
-                self.showNotification(title: "Ngram", body: "Screenshot captured")
+                sendNotification(title: "Ngram", body: "Screenshot captured")
             } else {
                 // User cancelled.
                 try? FileManager.default.removeItem(atPath: bundleDir)
@@ -171,10 +171,4 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func showNotification(title: String, body: String) {
-        let notification = NSUserNotification()
-        notification.title = title
-        notification.informativeText = body
-        NSUserNotificationCenter.default.deliver(notification)
-    }
 }

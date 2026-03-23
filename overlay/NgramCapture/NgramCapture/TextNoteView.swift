@@ -72,9 +72,6 @@ struct TextNoteView: View {
         let content = frontmatter + body + "\n"
         try? content.write(toFile: "\(inboxDir)/\(filename)", atomically: true, encoding: .utf8)
 
-        let notification = NSUserNotification()
-        notification.title = "Ngram"
-        notification.informativeText = "Note captured"
-        NSUserNotificationCenter.default.deliver(notification)
+        sendNotification(title: "Ngram", body: "Note captured")
     }
 }

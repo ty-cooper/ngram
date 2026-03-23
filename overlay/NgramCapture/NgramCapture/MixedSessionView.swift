@@ -99,7 +99,7 @@ struct MixedSessionView: View {
                 Button("Finish") {
                     manager.finish()
                     onDismiss()
-                    showNotification(count: manager.items.count)
+                    sendNotification(title: "Ngram", body: "\(manager.items.count) items captured")
                 }
                 .keyboardShortcut(.return, modifiers: .command)
                 .buttonStyle(.borderedProminent)
@@ -109,10 +109,4 @@ struct MixedSessionView: View {
         .frame(width: 480, height: 430)
     }
 
-    private func showNotification(count: Int) {
-        let notification = NSUserNotification()
-        notification.title = "Ngram"
-        notification.informativeText = "\(count) items captured"
-        NSUserNotificationCenter.default.deliver(notification)
-    }
 }
