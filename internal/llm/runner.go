@@ -13,9 +13,8 @@ import (
 )
 
 var (
-	ErrModelOff      = errors.New("model is off, skipping AI")
-	ErrBinaryMissing = errors.New("LLM binary not found in PATH")
-	ErrAuthExpired   = errors.New("anthropic API key missing or invalid")
+	ErrModelOff    = errors.New("model is off, skipping AI")
+	ErrAuthExpired = errors.New("anthropic API key missing or invalid")
 )
 
 // Runner wraps Anthropic API calls via the official Go SDK.
@@ -50,6 +49,7 @@ func NewMockRunner(response []byte) *Runner {
 
 type runConfig struct {
 	systemPrompt string
+	jsonSchema   map[string]any // If set, use OutputConfig for guaranteed schema compliance.
 	maxTokens    int
 	images       []string
 }
@@ -67,6 +67,12 @@ func WithMaxTokens(n int) RunOption {
 
 func WithImages(paths []string) RunOption {
 	return func(c *runConfig) { c.images = paths }
+}
+
+// WithJSONSchema enforces structured output via Anthropic's OutputConfig.
+// The API guarantees the response matches this JSON schema exactly.
+func WithJSONSchema(schema map[string]any) RunOption {
+	return func(c *runConfig) { c.jsonSchema = schema }
 }
 
 // Run sends a prompt to the Anthropic API and returns the text response.
@@ -113,16 +119,12 @@ func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]b
 	// Add text prompt.
 	contentBlocks = append(contentBlocks, anthropic.NewTextBlock(prompt))
 
-	// Build messages. Prefill assistant response with "{" to force JSON output.
-	messages := []anthropic.MessageParam{
-		anthropic.NewUserMessage(contentBlocks...),
-		anthropic.NewAssistantMessage(anthropic.NewTextBlock("{")),
-	}
-
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.ModelClaudeSonnet4_6,
 		MaxTokens: int64(cfg.maxTokens),
-		Messages:  messages,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(contentBlocks...),
+		},
 	}
 
 	if cfg.systemPrompt != "" {
@@ -131,14 +133,22 @@ func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]b
 		}
 	}
 
+	// Enforce JSON schema via OutputConfig. API guarantees schema compliance.
+	if cfg.jsonSchema != nil {
+		params.OutputConfig = anthropic.OutputConfigParam{
+			Format: anthropic.JSONOutputFormatParam{
+				Schema: cfg.jsonSchema,
+			},
+		}
+	}
+
 	msg, err := r.client.Messages.New(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("anthropic api: %w", err)
 	}
 
-	// Extract text from response. Prepend "{" since we prefilled the assistant.
+	// Extract text from response.
 	var result strings.Builder
-	result.WriteString("{")
 	for _, block := range msg.Content {
 		if block.Type == "text" {
 			result.WriteString(block.Text)
@@ -146,7 +156,7 @@ func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]b
 	}
 
 	text := strings.TrimSpace(result.String())
-	if text == "{" || text == "" {
+	if text == "" {
 		return nil, fmt.Errorf("anthropic api: empty response (stop_reason: %s)", msg.StopReason)
 	}
 

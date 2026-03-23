@@ -81,7 +81,7 @@ func upRun(cmd *cobra.Command, args []string) error {
 	// Preflight: check API auth before starting daemon.
 	fmt.Print("checking anthropic auth... ")
 	if err := runner.CheckAuth(cmd.Context()); err != nil {
-		if err == llm.ErrAuthExpired || err == llm.ErrBinaryMissing {
+		if err == llm.ErrAuthExpired {
 			fmt.Println("✗")
 			fmt.Printf("\n  %v\n\n", err)
 			return err

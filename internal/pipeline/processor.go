@@ -205,7 +205,10 @@ func (p *Processor) processBundle(ctx context.Context, inboxPath string, start t
 	// Structure with retry.
 	var structured *StructuredNote
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		opts := []llm.RunOption{llm.WithSystemPrompt(StructuringSystemPrompt)}
+		opts := []llm.RunOption{
+			llm.WithSystemPrompt(StructuringSystemPrompt),
+			llm.WithJSONSchema(NoteJSONSchema),
+		}
 		if len(imagePaths) > 0 {
 			opts = append(opts, llm.WithImages(imagePaths))
 		}
@@ -322,7 +325,10 @@ func (p *Processor) structureWithRetry(ctx context.Context, rawBody string, maxR
 	prompt := BuildStructuringPrompt(p.Taxonomy, rawBody)
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		out, err := p.Runner.Run(ctx, prompt, llm.WithSystemPrompt(StructuringSystemPrompt))
+		out, err := p.Runner.Run(ctx, prompt,
+			llm.WithSystemPrompt(StructuringSystemPrompt),
+			llm.WithJSONSchema(NoteJSONSchema),
+		)
 		if err != nil {
 			if errors.Is(err, llm.ErrModelOff) {
 				return nil, err
@@ -330,7 +336,7 @@ func (p *Processor) structureWithRetry(ctx context.Context, rawBody string, maxR
 			return nil, fmt.Errorf("llm call (attempt %d): %w", attempt+1, err)
 		}
 
-		// Strip markdown code fences if Claude wraps JSON in them.
+		// Strip code fences just in case.
 		out = stripCodeFences(out)
 
 		note, err := ParseStructuredJSON(out)
