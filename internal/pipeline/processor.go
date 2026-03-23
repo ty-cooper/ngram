@@ -25,6 +25,7 @@ type Processor struct {
 	Runner       *llm.Runner
 	Taxonomy     *taxonomy.Taxonomy
 	SearchClient *search.Client // nil if Meilisearch unavailable
+	Dedup        *Deduplicator  // nil to skip dedup
 	MaxRetries   int            // default 2
 }
 
@@ -72,7 +73,22 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 		structured.Tags = p.Taxonomy.ResolveTags(structured.Tags)
 	}
 
-	// 8. Create ProcessedNote.
+	// 8. Dedup check.
+	if p.Dedup != nil {
+		result := p.Dedup.Check(ctx, structured, procPath)
+		switch result.Action {
+		case "duplicate":
+			log.Printf("ngram: dedup — duplicate of %s", result.TargetID)
+			return p.archiveRaw(procPath)
+		case "appended":
+			log.Printf("ngram: dedup — appended to %s", result.TargetID)
+			p.gitCommit(result.TargetID, result.TargetID, "append")
+			return p.archiveRaw(procPath)
+		}
+		// "proceed" — continue with normal pipeline.
+	}
+
+	// 9. Create ProcessedNote.
 	processed := &ProcessedNote{
 		StructuredNote: *structured,
 		ID:             GenerateID(),

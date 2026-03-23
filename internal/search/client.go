@@ -184,6 +184,52 @@ func (c *Client) Search(query string, opts SearchOptions) (*SearchResponse, erro
 	}, nil
 }
 
+// SimilarNote is a search hit with a ranking score for dedup comparison.
+type SimilarNote struct {
+	ID          string
+	Title       string
+	Body        string
+	Summary     string
+	Domain      string
+	FilePath    string
+	Score       float64
+}
+
+// FindSimilar returns the top N most similar notes to the given query text.
+// Uses Meilisearch ranking scores to measure similarity.
+func (c *Client) FindSimilar(query string, limit int64) ([]SimilarNote, error) {
+	if limit == 0 {
+		limit = 5
+	}
+
+	req := &meilisearch.SearchRequest{
+		Limit:            limit,
+		ShowRankingScore: true,
+		AttributesToRetrieve: []string{"id", "title", "body", "summary", "domain", "file_path"},
+	}
+
+	resp, err := c.index.Search(query, req)
+	if err != nil {
+		return nil, fmt.Errorf("find similar: %w", err)
+	}
+
+	results := make([]SimilarNote, 0, len(resp.Hits))
+	for _, hit := range resp.Hits {
+		score := hitFloat(hit, "_rankingScore")
+		results = append(results, SimilarNote{
+			ID:       hitStr(hit, "id"),
+			Title:    hitStr(hit, "title"),
+			Body:     hitStr(hit, "body"),
+			Summary:  hitStr(hit, "summary"),
+			Domain:   hitStr(hit, "domain"),
+			FilePath: hitStr(hit, "file_path"),
+			Score:    score,
+		})
+	}
+
+	return results, nil
+}
+
 // Healthy returns true if Meilisearch is reachable.
 func (c *Client) Healthy() bool {
 	return c.ms.IsHealthy()
@@ -241,6 +287,19 @@ func rawStr(m map[string]json.RawMessage, key string) string {
 		return ""
 	}
 	return s
+}
+
+// hitFloat extracts a float64 value from a Hit.
+func hitFloat(hit meilisearch.Hit, key string) float64 {
+	raw, ok := hit[key]
+	if !ok {
+		return 0
+	}
+	var f float64
+	if err := json.Unmarshal(raw, &f); err != nil {
+		return 0
+	}
+	return f
 }
 
 func truncate(s string, n int) string {
