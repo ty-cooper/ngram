@@ -97,9 +97,16 @@ struct MixedSessionView: View {
                 .keyboardShortcut(.escape, modifiers: [])
 
                 Button("Finish") {
+                    // Flush any pending text before finishing.
+                    let pending = textInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !pending.isEmpty {
+                        manager.addText(pending)
+                        textInput = ""
+                    }
+                    let count = manager.items.count
                     manager.finish()
                     onDismiss()
-                    sendNotification(title: "Ngram", body: "\(manager.items.count) items captured")
+                    sendNotification(title: "Ngram", body: "\(count) items captured")
                 }
                 .keyboardShortcut(.return, modifiers: .command)
                 .buttonStyle(.borderedProminent)
