@@ -1,4 +1,4 @@
-module github.com/tylercooper/ngram
+module github.com/ty-cooper/ngram
 
 go 1.25.0
 

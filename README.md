@@ -7,7 +7,7 @@ Single Go binary. Meilisearch for search. Claude Code CLI for AI structuring. Ob
 ## Install
 
 ```bash
-go install github.com/tylercooper/ngram/cmd/n@latest
+go install github.com/ty-cooper/ngram/cmd/n@latest
 ```
 
 ## Setup

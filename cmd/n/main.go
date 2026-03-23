@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/tylercooper/ngram/internal/cli"
+	"github.com/ty-cooper/ngram/internal/cli"
 )
 
 func main() {

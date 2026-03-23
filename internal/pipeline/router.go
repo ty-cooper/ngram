@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/tylercooper/ngram/internal/capture"
+	"github.com/ty-cooper/ngram/internal/capture"
 )
 
 // Route determines the destination directory (relative to vault root) and filename.

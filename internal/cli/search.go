@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/tylercooper/ngram/internal/search"
-	"github.com/tylercooper/ngram/internal/search/query"
+	"github.com/ty-cooper/ngram/internal/search"
+	"github.com/ty-cooper/ngram/internal/search/query"
 )
 
 var (

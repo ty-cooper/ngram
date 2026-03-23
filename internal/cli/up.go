@@ -7,11 +7,11 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/tylercooper/ngram/internal/daemon"
-	"github.com/tylercooper/ngram/internal/llm"
-	"github.com/tylercooper/ngram/internal/pipeline"
-	"github.com/tylercooper/ngram/internal/search"
-	"github.com/tylercooper/ngram/internal/taxonomy"
+	"github.com/ty-cooper/ngram/internal/daemon"
+	"github.com/ty-cooper/ngram/internal/llm"
+	"github.com/ty-cooper/ngram/internal/pipeline"
+	"github.com/ty-cooper/ngram/internal/search"
+	"github.com/ty-cooper/ngram/internal/taxonomy"
 )
 
 var (

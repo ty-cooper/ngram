@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/tylercooper/ngram/internal/vault"
+	"github.com/ty-cooper/ngram/internal/vault"
 )
 
 // ServiceFunc is a long-running goroutine function.

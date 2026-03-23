@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/tylercooper/ngram/internal/capture"
-	"github.com/tylercooper/ngram/internal/config"
+	"github.com/ty-cooper/ngram/internal/capture"
+	"github.com/ty-cooper/ngram/internal/config"
 )
 
 var runCmd = &cobra.Command{

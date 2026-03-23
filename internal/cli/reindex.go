@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/tylercooper/ngram/internal/search"
+	"github.com/ty-cooper/ngram/internal/search"
 )
 
 var reindexCmd = &cobra.Command{

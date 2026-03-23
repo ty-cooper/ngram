@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tylercooper/ngram/internal/config"
+	"github.com/ty-cooper/ngram/internal/config"
 )
 
 type NoteMetadata struct {

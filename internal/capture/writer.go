@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/tylercooper/ngram/internal/config"
+	"github.com/ty-cooper/ngram/internal/config"
 )
 
 type WriteResult struct {

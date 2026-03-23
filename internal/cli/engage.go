@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/tylercooper/ngram/internal/daemon"
+	"github.com/ty-cooper/ngram/internal/daemon"
 )
 
 var engageCmd = &cobra.Command{

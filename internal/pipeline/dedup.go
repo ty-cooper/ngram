@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tylercooper/ngram/internal/llm"
-	"github.com/tylercooper/ngram/internal/search"
-	"github.com/tylercooper/ngram/internal/vault"
+	"github.com/ty-cooper/ngram/internal/llm"
+	"github.com/ty-cooper/ngram/internal/search"
+	"github.com/ty-cooper/ngram/internal/vault"
 )
 
 const dedupThreshold = 0.85

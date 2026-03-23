@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/tylercooper/ngram/internal/vault"
+	"github.com/ty-cooper/ngram/internal/vault"
 )
 
 // Watcher monitors _inbox/ for new files and dispatches them to the processor.

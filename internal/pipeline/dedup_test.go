@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tylercooper/ngram/internal/search"
+	"github.com/ty-cooper/ngram/internal/search"
 )
 
 func TestBuildDedupPrompt(t *testing.T) {

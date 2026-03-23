@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/tylercooper/ngram/internal/llm"
-	"github.com/tylercooper/ngram/internal/search"
+	"github.com/ty-cooper/ngram/internal/llm"
+	"github.com/ty-cooper/ngram/internal/search"
 )
 
 var reportCmd = &cobra.Command{

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/tylercooper/ngram/internal/config"
+	"github.com/ty-cooper/ngram/internal/config"
 )
 
 var validPhases = []string{"recon", "enum", "exploit", "post", "loot"}

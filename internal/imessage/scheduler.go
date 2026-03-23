@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tylercooper/ngram/internal/vault"
+	"github.com/ty-cooper/ngram/internal/vault"
 )
 
 // DeliveryState is persisted to _meta/quiz-delivery-state.json.

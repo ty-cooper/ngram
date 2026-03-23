@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tylercooper/ngram/internal/taxonomy"
+	"github.com/ty-cooper/ngram/internal/taxonomy"
 )
 
 // BuildStructuringPrompt creates the prompt sent to Claude for structuring a raw note.

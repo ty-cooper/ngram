@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/tylercooper/ngram/internal/vault"
+	"github.com/ty-cooper/ngram/internal/vault"
 )
 
 var (

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tylercooper/ngram/internal/config"
+	"github.com/ty-cooper/ngram/internal/config"
 )
 
 func TestWriteNote(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tylercooper/ngram/internal/llm"
-	"github.com/tylercooper/ngram/internal/taxonomy"
+	"github.com/ty-cooper/ngram/internal/llm"
+	"github.com/ty-cooper/ngram/internal/taxonomy"
 )
 
 func TestProcess_MockModel(t *testing.T) {

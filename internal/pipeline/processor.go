@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tylercooper/ngram/internal/llm"
-	"github.com/tylercooper/ngram/internal/notify"
-	"github.com/tylercooper/ngram/internal/search"
-	"github.com/tylercooper/ngram/internal/taxonomy"
-	"github.com/tylercooper/ngram/internal/vault"
+	"github.com/ty-cooper/ngram/internal/llm"
+	"github.com/ty-cooper/ngram/internal/notify"
+	"github.com/ty-cooper/ngram/internal/search"
+	"github.com/ty-cooper/ngram/internal/taxonomy"
+	"github.com/ty-cooper/ngram/internal/vault"
 )
 
 // Processor runs the structuring pipeline for notes in _inbox/.
