@@ -97,7 +97,7 @@ func (r *Runner) buildClaudeArgs(prompt string, cfg *runConfig) []string {
 	if cfg.jsonSchema != "" {
 		outputFormat = "text"
 	}
-	args := []string{"-p", prompt, "--output-format", outputFormat}
+	args := []string{"-p", prompt, "--output-format", outputFormat, "--max-turns", "1"}
 	if cfg.systemPrompt != "" {
 		args = append(args, "--system-prompt", cfg.systemPrompt)
 	}

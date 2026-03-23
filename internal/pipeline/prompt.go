@@ -48,7 +48,7 @@ const StructuredNoteSchema = `{
 func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string) string {
 	var b strings.Builder
 
-	b.WriteString("You are a knowledge structuring agent for the Ngram system.\n\n")
+	b.WriteString("OUTPUT ONLY THE JSON OBJECT. NO COMMENTARY. NO EXPLANATION. NO PREAMBLE.\n\n")
 	b.WriteString("Structure the following raw note into a clean, atomic knowledge note.\n\n")
 
 	b.WriteString("WRITING RULES (non negotiable):\n")
@@ -78,7 +78,7 @@ func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string) string {
 	b.WriteString("- link: saved URLs with description (not quizzed)\n")
 	b.WriteString("- media: screenshots, images with description (not quizzed)\n\n")
 
-	b.WriteString("Return valid JSON matching the structured note schema. Always generate a title from the content.\n\n")
+	b.WriteString("Output ONLY the JSON object. No markdown fences. No explanation. No text before or after the JSON.\n\n")
 
 	b.WriteString("RAW NOTE:\n")
 	b.WriteString(rawContent)
