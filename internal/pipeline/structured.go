@@ -1,0 +1,123 @@
+package pipeline
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+)
+
+// StructuredNote is the JSON schema Claude returns after structuring.
+type StructuredNote struct {
+	Title        string   `json:"title"`
+	Summary      string   `json:"summary"`
+	Body         string   `json:"body"`
+	ContentType  string   `json:"content_type"`
+	Domain       string   `json:"domain"`
+	TopicCluster string   `json:"topic_cluster"`
+	Tags         []string `json:"tags"`
+}
+
+// ProcessedNote is the fully resolved note ready for writing.
+type ProcessedNote struct {
+	StructuredNote
+	ID      string
+	Source  string
+	Box     string
+	Phase   string
+	Created time.Time
+}
+
+// GenerateID returns a random 8-char hex string.
+func GenerateID() string {
+	b := make([]byte, 4)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// ParseStructuredJSON parses Claude's JSON response into a StructuredNote.
+func ParseStructuredJSON(data []byte) (*StructuredNote, error) {
+	var note StructuredNote
+	if err := json.Unmarshal(data, &note); err != nil {
+		return nil, fmt.Errorf("parse structured json: %w", err)
+	}
+	if note.Title == "" {
+		return nil, fmt.Errorf("structured note missing title")
+	}
+	if note.Body == "" {
+		return nil, fmt.Errorf("structured note missing body")
+	}
+	if note.ContentType == "" {
+		note.ContentType = "knowledge"
+	}
+	return &note, nil
+}
+
+// BuildFrontmatter generates the full COO-83 YAML frontmatter for a ProcessedNote.
+func BuildFrontmatter(n *ProcessedNote) string {
+	var b strings.Builder
+	b.WriteString("---\n")
+	fmt.Fprintf(&b, "id: %q\n", n.ID)
+	fmt.Fprintf(&b, "title: %q\n", n.Title)
+	fmt.Fprintf(&b, "content_type: %q\n", n.ContentType)
+	fmt.Fprintf(&b, "created: %q\n", n.Created.UTC().Format(time.RFC3339))
+	fmt.Fprintf(&b, "modified: %q\n", n.Created.UTC().Format(time.RFC3339))
+	fmt.Fprintf(&b, "source: %q\n", n.Source)
+
+	if n.Domain != "" {
+		fmt.Fprintf(&b, "domain: %q\n", n.Domain)
+	}
+	if n.TopicCluster != "" {
+		fmt.Fprintf(&b, "topic_cluster: %q\n", n.TopicCluster)
+	}
+
+	if len(n.Tags) > 0 {
+		b.WriteString("tags:\n")
+		for _, tag := range n.Tags {
+			fmt.Fprintf(&b, "  - %s\n", tag)
+		}
+	}
+
+	if n.Box != "" {
+		fmt.Fprintf(&b, "box: %q\n", n.Box)
+	}
+	if n.Phase != "" {
+		fmt.Fprintf(&b, "phase: %q\n", n.Phase)
+	}
+
+	b.WriteString("related: []\n")
+
+	// Retention block per COO-83.
+	if n.ContentType == "knowledge" {
+		b.WriteString("retention:\n")
+		b.WriteString("  state: new\n")
+		b.WriteString("  ease_factor: 2.5\n")
+		b.WriteString("  interval_days: 0\n")
+		b.WriteString("  repetition_count: 0\n")
+		b.WriteString("  lapse_count: 0\n")
+		b.WriteString("  streak: 0\n")
+		b.WriteString("  total_reviews: 0\n")
+		b.WriteString("  total_correct: 0\n")
+		b.WriteString("  retention_score: 0\n")
+		fmt.Fprintf(&b, "  next_review: %q\n", n.Created.Format("2006-01-02"))
+		b.WriteString("  last_reviewed: null\n")
+	}
+
+	b.WriteString("---\n")
+	return b.String()
+}
+
+// BuildNoteContent returns the complete markdown: frontmatter + summary + body.
+func BuildNoteContent(n *ProcessedNote) string {
+	var b strings.Builder
+	b.WriteString(BuildFrontmatter(n))
+	b.WriteString("\n")
+	if n.Summary != "" {
+		fmt.Fprintf(&b, "*%s*\n\n", n.Summary)
+	}
+	b.WriteString(n.Body)
+	b.WriteString("\n")
+	return b.String()
+}
