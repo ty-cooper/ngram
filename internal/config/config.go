@@ -9,8 +9,14 @@ import (
 )
 
 type Config struct {
-	VaultPath string `mapstructure:"vault_path"`
-	Model     string `mapstructure:"model"`
+	VaultPath   string            `mapstructure:"vault_path"`
+	Model       string            `mapstructure:"model"`
+	Meilisearch MeilisearchConfig `mapstructure:"meilisearch"`
+}
+
+type MeilisearchConfig struct {
+	Host   string `mapstructure:"host"`
+	APIKey string `mapstructure:"api_key"`
 }
 
 func Load() (*Config, error) {
@@ -24,6 +30,8 @@ func Load() (*Config, error) {
 	viper.AddConfigPath(home)
 
 	viper.SetDefault("model", "cloud")
+	viper.SetDefault("meilisearch.host", "http://127.0.0.1:7700")
+	viper.SetDefault("meilisearch.api_key", "")
 
 	viper.SetEnvPrefix("NGRAM")
 	viper.BindEnv("vault_path")

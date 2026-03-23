@@ -40,6 +40,8 @@ func init() {
 	rootCmd.AddCommand(boxCmd)
 	rootCmd.AddCommand(phaseCmd)
 	rootCmd.AddCommand(completionCmd)
+	rootCmd.AddCommand(searchCmd)
+	rootCmd.AddCommand(reindexCmd)
 }
 
 func Execute() error {
