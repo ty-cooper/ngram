@@ -328,7 +328,7 @@ func (p *Processor) moveToProcessing(path string) (string, error) {
 }
 
 func (p *Processor) structureWithRetry(ctx context.Context, rawBody string, maxRetries int) ([]*StructuredNote, error) {
-	prompt := BuildStructuringPrompt(p.Taxonomy, rawBody)
+	prompt := BuildStructuringPrompt(p.Taxonomy, rawBody, p.VaultPath)
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		out, err := p.Runner.Run(ctx, prompt,

@@ -2,6 +2,8 @@ package pipeline
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ty-cooper/ngram/internal/taxonomy"
@@ -57,10 +59,11 @@ CONTENT TYPES:
 - media: screenshots (not quizzed)`
 
 // BuildStructuringPrompt creates the user prompt sent to Claude.
-func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string) string {
+// vaultPath is used to discover existing domain/cluster folders for consistency.
+func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string, vaultPath ...string) string {
 	var b strings.Builder
 
-	b.WriteString("Classify this note and clean up formatting. Do not rewrite or rephrase the content.\n\n")
+	b.WriteString("Split this into atomic notes. One concept per note. Genericize commands with {{PLACEHOLDER}} syntax.\n\n")
 
 	if domains := tax.CanonicalDomainList(); len(domains) > 0 {
 		fmt.Fprintf(&b, "CANONICAL DOMAINS: %s\n", strings.Join(domains, ", "))
@@ -71,10 +74,42 @@ func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string) string {
 		b.WriteString("Use canonical tags when applicable. You may propose new tags.\n\n")
 	}
 
+	// Inject existing domain/cluster paths so Claude reuses them.
+	if len(vaultPath) > 0 && vaultPath[0] != "" {
+		if clusters := discoverClusters(vaultPath[0]); len(clusters) > 0 {
+			fmt.Fprintf(&b, "EXISTING CLUSTERS (reuse these, do not create near-duplicates):\n%s\n\n", strings.Join(clusters, "\n"))
+		}
+	}
+
 	b.WriteString("RAW NOTE:\n")
 	b.WriteString(rawContent)
 
 	return b.String()
+}
+
+// discoverClusters scans knowledge/{domain}/{cluster}/ directories.
+func discoverClusters(vaultPath string) []string {
+	knowledgeDir := filepath.Join(vaultPath, "knowledge")
+	domains, err := os.ReadDir(knowledgeDir)
+	if err != nil {
+		return nil
+	}
+	var clusters []string
+	for _, d := range domains {
+		if !d.IsDir() || strings.HasPrefix(d.Name(), ".") {
+			continue
+		}
+		subs, err := os.ReadDir(filepath.Join(knowledgeDir, d.Name()))
+		if err != nil {
+			continue
+		}
+		for _, s := range subs {
+			if s.IsDir() && !strings.HasPrefix(s.Name(), ".") {
+				clusters = append(clusters, fmt.Sprintf("  %s / %s", d.Name(), s.Name()))
+			}
+		}
+	}
+	return clusters
 }
 
 // BuildRetryPrompt creates a prompt that includes previous violations.
