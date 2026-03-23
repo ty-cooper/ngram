@@ -82,6 +82,20 @@ func upRun(cmd *cobra.Command, args []string) error {
 		VaultPath:  c.VaultPath,
 	}
 
+	// Preflight: check claude auth before starting daemon.
+	fmt.Print("checking claude auth... ")
+	if err := runner.CheckAuth(cmd.Context()); err != nil {
+		if err == llm.ErrAuthExpired || err == llm.ErrBinaryMissing {
+			fmt.Println("✗")
+			fmt.Printf("\n  %v\n\n", err)
+			return err
+		}
+		fmt.Printf("✗ (%v)\n", err)
+		fmt.Println("  continuing with degraded AI (notes will queue in _inbox/)")
+	} else {
+		fmt.Println("✓")
+	}
+
 	proc := &pipeline.Processor{
 		VaultPath:    c.VaultPath,
 		Runner:       runner,

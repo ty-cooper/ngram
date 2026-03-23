@@ -11,6 +11,7 @@ import (
 var (
 	ErrModelOff      = errors.New("model is off, skipping AI")
 	ErrBinaryMissing = errors.New("LLM binary not found in PATH")
+	ErrAuthExpired   = errors.New("claude auth expired, run: claude login")
 )
 
 // Runner wraps exec.Command calls to the claude or ollama binary.
@@ -93,6 +94,38 @@ func (r *Runner) buildClaudeArgs(prompt string, cfg *runConfig) []string {
 		args = append(args, "--max-tokens", fmt.Sprintf("%d", cfg.maxTokens))
 	}
 	return args
+}
+
+// CheckAuth verifies the claude binary exists and auth is valid.
+// Returns nil if model is "off", "local", or "mock".
+func (r *Runner) CheckAuth(ctx context.Context) error {
+	if r.Model == "off" || r.Model == "local" || r.Model == "mock" {
+		return nil
+	}
+
+	binary := r.BinaryPath
+	if binary == "" {
+		binary = "claude"
+	}
+
+	if _, err := exec.LookPath(binary); err != nil {
+		return ErrBinaryMissing
+	}
+
+	cmd := exec.CommandContext(ctx, binary, "-p", "respond with ok", "--output-format", "text", "--max-turns", "1")
+	cmd.Dir = r.VaultPath
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		msg := stderr.String()
+		if bytes.Contains([]byte(msg), []byte("auth")) || bytes.Contains([]byte(msg), []byte("login")) || bytes.Contains([]byte(msg), []byte("token")) || bytes.Contains([]byte(msg), []byte("expired")) {
+			return ErrAuthExpired
+		}
+		return fmt.Errorf("claude check failed: %w: %s", err, msg)
+	}
+	return nil
 }
 
 func (r *Runner) buildOllamaArgs(cfg *runConfig) []string {
