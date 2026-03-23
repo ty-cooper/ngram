@@ -39,6 +39,10 @@ func (w *Watcher) Start(ctx context.Context) error {
 	}
 
 	log.Printf("ngram: watching %s", inboxDir)
+
+	// Process existing files in _inbox/ that were added before the daemon started.
+	w.drainExisting(ctx, inboxDir)
+
 	return w.debouncedWatch(ctx, watcher)
 }
 
@@ -63,6 +67,23 @@ func (w *Watcher) recoverOrphans() {
 			log.Printf("warn: recover orphan %s: %v", e.Name(), err)
 		} else {
 			log.Printf("ngram: recovered orphan %s", e.Name())
+		}
+	}
+}
+
+func (w *Watcher) drainExisting(ctx context.Context, inboxDir string) {
+	entries, err := os.ReadDir(inboxDir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".md") || strings.HasPrefix(e.Name(), ".tmp-") {
+			continue
+		}
+		p := filepath.Join(inboxDir, e.Name())
+		log.Printf("ngram: processing existing %s", e.Name())
+		if err := w.Processor.Process(ctx, p); err != nil {
+			log.Printf("error: process %s: %v", e.Name(), err)
 		}
 	}
 }
