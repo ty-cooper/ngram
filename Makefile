@@ -17,7 +17,8 @@ overlay:
 	cp overlay/NgramCapture/NgramCapture/Info.plist $(BUILD_DIR)/NgramCapture.app/Contents/Info.plist
 	codesign --force --deep --sign - $(BUILD_DIR)/NgramCapture.app
 	xattr -r -d com.apple.quarantine $(BUILD_DIR)/NgramCapture.app 2>/dev/null || true
-	@echo "Built $(BUILD_DIR)/NgramCapture.app — open it or add to Login Items"
+	@echo "Built $(BUILD_DIR)/NgramCapture.app"
+	@echo "NOTE: If this is a fresh build, re-grant Accessibility + Screen Recording in System Settings"
 
 test:
 	go test ./...

@@ -33,10 +33,14 @@ func TestParseStructuredJSON(t *testing.T) {
 }
 
 func TestParseStructuredJSON_MissingTitle(t *testing.T) {
+	// Title is optional — Claude generates one from content if not provided.
 	data := []byte(`{"body": "some content"}`)
-	_, err := ParseStructuredJSON(data)
-	if err == nil {
-		t.Fatal("expected error for missing title")
+	note, err := ParseStructuredJSON(data)
+	if err != nil {
+		t.Fatalf("ParseStructuredJSON should not error on missing title: %v", err)
+	}
+	if note.Body != "some content" {
+		t.Errorf("Body = %q", note.Body)
 	}
 }
 

@@ -91,11 +91,7 @@ func reportRun(cmd *cobra.Command, args []string) error {
 	fmt.Printf("[+] %d notes across %d phases\n", len(notes), countPhases(notes))
 
 	// Build report via LLM.
-	runner := &llm.Runner{
-		BinaryPath: "claude",
-		Model:      c.Model,
-		VaultPath:  c.VaultPath,
-	}
+	runner := llm.NewRunner(c.Model, c.VaultPath)
 
 	prompt := buildReportPrompt(boxName, notes)
 	out, err := runner.Run(context.Background(), prompt)

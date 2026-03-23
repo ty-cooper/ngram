@@ -15,14 +15,6 @@ import (
 func TestProcess_MockModel(t *testing.T) {
 	vaultDir := t.TempDir()
 
-	// Create mock claude script.
-	mockScript := filepath.Join(vaultDir, "mock-claude")
-	os.WriteFile(mockScript, []byte(`#!/bin/sh
-cat <<'FIXTURE'
-{"title":"Raft Leader Election","summary":"How Raft elects a leader.","body":"When a follower timeout fires, it becomes a candidate and requests votes.","content_type":"knowledge","domain":"distributed-systems","topic_cluster":"consensus","tags":["raft","consensus"]}
-FIXTURE
-`), 0o755)
-
 	// Create vault directories.
 	os.MkdirAll(filepath.Join(vaultDir, "_inbox"), 0o755)
 	os.MkdirAll(filepath.Join(vaultDir, "_meta"), 0o755)
@@ -65,11 +57,7 @@ election timeout fires, it transitions to candidate state.
 
 	proc := &Processor{
 		VaultPath: vaultDir,
-		Runner: &llm.Runner{
-			BinaryPath: mockScript,
-			Model:      "mock",
-			VaultPath:  vaultDir,
-		},
+		Runner: llm.NewMockRunner([]byte(`{"title":"Raft Leader Election","summary":"Raft leader election mechanism.","body":"Raft consensus uses leader election.","content_type":"knowledge","domain":"distributed-systems","topic_cluster":"consensus","tags":["raft","consensus"]}`)),
 		Taxonomy:   tax,
 		MaxRetries: 0,
 	}
@@ -147,7 +135,7 @@ Some raw content.
 
 	proc := &Processor{
 		VaultPath: vaultDir,
-		Runner:    &llm.Runner{Model: "off"},
+		Runner:    llm.NewRunner("off", vaultDir),
 	}
 
 	err := proc.Process(context.Background(), inboxPath)

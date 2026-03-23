@@ -41,11 +41,7 @@ func askRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("connect to meilisearch: %w", err)
 	}
 
-	runner := &llm.Runner{
-		BinaryPath: "claude",
-		Model:      c.Model,
-		VaultPath:  c.VaultPath,
-	}
+	runner := llm.NewRunner(c.Model, c.VaultPath)
 
 	engine := &rag.Engine{
 		SearchClient: client,

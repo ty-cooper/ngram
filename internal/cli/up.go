@@ -76,14 +76,10 @@ func upRun(cmd *cobra.Command, args []string) error {
 		searchClient = sc
 	}
 
-	runner := &llm.Runner{
-		BinaryPath: "claude",
-		Model:      c.Model,
-		VaultPath:  c.VaultPath,
-	}
+	runner := llm.NewRunner(c.Model, c.VaultPath)
 
-	// Preflight: check claude auth before starting daemon.
-	fmt.Print("checking claude auth... ")
+	// Preflight: check API auth before starting daemon.
+	fmt.Print("checking anthropic auth... ")
 	if err := runner.CheckAuth(cmd.Context()); err != nil {
 		if err == llm.ErrAuthExpired || err == llm.ErrBinaryMissing {
 			fmt.Println("✗")

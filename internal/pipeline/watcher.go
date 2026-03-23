@@ -77,10 +77,14 @@ func (w *Watcher) drainExisting(ctx context.Context, inboxDir string) {
 		return
 	}
 	for _, e := range entries {
-		if !strings.HasSuffix(e.Name(), ".md") || strings.HasPrefix(e.Name(), ".tmp-") {
+		if strings.HasPrefix(e.Name(), ".tmp-") {
 			continue
 		}
 		p := filepath.Join(inboxDir, e.Name())
+		// Accept .md files and capture bundle directories (contain manifest.yml).
+		if !strings.HasSuffix(e.Name(), ".md") && !IsBundle(p) {
+			continue
+		}
 		log.Printf("ngram: processing existing %s", e.Name())
 		if err := w.Processor.Process(ctx, p); err != nil {
 			log.Printf("error: process %s: %v", e.Name(), err)
@@ -119,8 +123,14 @@ func (w *Watcher) debouncedWatch(ctx context.Context, watcher *fsnotify.Watcher)
 				if now.Sub(last) > 500*time.Millisecond {
 					delete(pending, path)
 
-					// Verify file still exists (may have been moved already).
-					if _, err := os.Stat(path); os.IsNotExist(err) {
+					// Verify file/dir still exists (may have been moved already).
+					info, err := os.Stat(path)
+					if os.IsNotExist(err) {
+						continue
+					}
+
+					// For directories, only process if they're capture bundles.
+					if info != nil && info.IsDir() && !IsBundle(path) {
 						continue
 					}
 
@@ -143,8 +153,15 @@ func isProcessable(event fsnotify.Event) bool {
 	if strings.HasPrefix(name, ".tmp-") {
 		return false
 	}
-	if !strings.HasSuffix(name, ".md") {
-		return false
+	// Accept .md files and capture bundle directories.
+	if strings.HasSuffix(name, ".md") {
+		return true
 	}
-	return true
+	// Check if it's a directory (potential capture bundle). For fsnotify Create
+	// events on directories, we delay processing until the manifest.yml is written.
+	// The debounce handles this — by the time 500ms passes, the bundle is complete.
+	if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+		return true
+	}
+	return false
 }

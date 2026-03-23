@@ -1,30 +1,57 @@
 package llm
 
 import (
-	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
-	"os/exec"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/anthropics/anthropic-sdk-go"
 )
 
 var (
 	ErrModelOff      = errors.New("model is off, skipping AI")
 	ErrBinaryMissing = errors.New("LLM binary not found in PATH")
-	ErrAuthExpired   = errors.New("claude auth expired, run: claude login")
+	ErrAuthExpired   = errors.New("anthropic API key missing or invalid")
 )
 
-// Runner wraps exec.Command calls to the claude or ollama binary.
+// Runner wraps Anthropic API calls via the official Go SDK.
 type Runner struct {
-	BinaryPath string // "claude" (default), "ollama", or path to mock script
-	Model      string // "cloud", "local", "off", "mock"
-	VaultPath  string // working directory for invocations
+	Model        string // "cloud", "local", "off", "mock"
+	VaultPath    string
+	MockResponse []byte // For testing: if set, Run returns this instead of calling API.
+	client       anthropic.Client
+	hasClient    bool
+}
+
+// NewRunner creates a Runner. For cloud mode, ANTHROPIC_API_KEY must be set.
+func NewRunner(model, vaultPath string) *Runner {
+	r := &Runner{
+		Model:     model,
+		VaultPath: vaultPath,
+	}
+	if model == "cloud" || model == "" {
+		r.client = anthropic.NewClient()
+		r.hasClient = true
+	}
+	return r
+}
+
+// NewMockRunner creates a Runner that returns a fixed response for testing.
+func NewMockRunner(response []byte) *Runner {
+	return &Runner{
+		Model:        "mock",
+		MockResponse: response,
+	}
 }
 
 type runConfig struct {
 	systemPrompt string
-	jsonSchema   string
 	maxTokens    int
+	images       []string
 }
 
 // RunOption configures a Run call.
@@ -38,112 +65,104 @@ func WithMaxTokens(n int) RunOption {
 	return func(c *runConfig) { c.maxTokens = n }
 }
 
-func WithJSONSchema(schema string) RunOption {
-	return func(c *runConfig) { c.jsonSchema = schema }
+func WithImages(paths []string) RunOption {
+	return func(c *runConfig) { c.images = paths }
 }
 
-// Run executes the LLM binary with a prompt and returns stdout.
+// Run sends a prompt to the Anthropic API and returns the text response.
 func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]byte, error) {
 	if r.Model == "off" {
 		return nil, ErrModelOff
 	}
 
-	cfg := &runConfig{}
+	if r.Model == "mock" && r.MockResponse != nil {
+		return r.MockResponse, nil
+	}
+
+	cfg := &runConfig{maxTokens: 4096}
 	for _, o := range opts {
 		o(cfg)
 	}
 
-	binary := r.BinaryPath
-	if binary == "" {
-		binary = "claude"
+	if !r.hasClient {
+		return nil, ErrAuthExpired
 	}
 
-	var args []string
-	switch r.Model {
-	case "cloud", "mock", "":
-		args = r.buildClaudeArgs(prompt, cfg)
-	case "local":
-		args = r.buildOllamaArgs(cfg)
-	default:
-		return nil, fmt.Errorf("unknown model: %q", r.Model)
-	}
+	// Build content blocks.
+	var contentBlocks []anthropic.ContentBlockParamUnion
 
-	cmd := exec.CommandContext(ctx, binary, args...)
-	cmd.Dir = r.VaultPath
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	// For local/mock, pass prompt via stdin.
-	if r.Model == "local" || r.Model == "mock" {
-		cmd.Stdin = bytes.NewReader([]byte(prompt))
-	}
-
-	if err := cmd.Run(); err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			return nil, ErrBinaryMissing
+	// Add images first if present.
+	for _, imgPath := range cfg.images {
+		data, err := os.ReadFile(imgPath)
+		if err != nil {
+			continue
 		}
-		return nil, fmt.Errorf("llm %s: %w: %s", binary, err, stderr.String())
+		ext := strings.ToLower(filepath.Ext(imgPath))
+		mediaType := "image/png"
+		switch ext {
+		case ".jpg", ".jpeg":
+			mediaType = "image/jpeg"
+		case ".gif":
+			mediaType = "image/gif"
+		case ".webp":
+			mediaType = "image/webp"
+		}
+		contentBlocks = append(contentBlocks, anthropic.NewImageBlockBase64(mediaType, base64.StdEncoding.EncodeToString(data)))
 	}
 
-	return stdout.Bytes(), nil
-}
+	// Add text prompt.
+	contentBlocks = append(contentBlocks, anthropic.NewTextBlock(prompt))
 
-func (r *Runner) buildClaudeArgs(prompt string, cfg *runConfig) []string {
-	// Use --output-format text when --json-schema is set so we get
-	// the raw JSON response, not the Claude Code metadata envelope.
-	outputFormat := "json"
-	if cfg.jsonSchema != "" {
-		outputFormat = "text"
+	// Build params.
+	params := anthropic.MessageNewParams{
+		Model:     anthropic.ModelClaudeSonnet4_6,
+		MaxTokens: int64(cfg.maxTokens),
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(contentBlocks...),
+		},
 	}
-	args := []string{"-p", prompt, "--output-format", outputFormat, "--tools", "WebSearch,WebFetch", "--max-turns", "3"}
+
 	if cfg.systemPrompt != "" {
-		args = append(args, "--system-prompt", cfg.systemPrompt)
+		params.System = []anthropic.TextBlockParam{
+			{Text: cfg.systemPrompt, Type: "text"},
+		}
 	}
-	if cfg.jsonSchema != "" {
-		args = append(args, "--json-schema", cfg.jsonSchema)
+
+	msg, err := r.client.Messages.New(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("anthropic api: %w", err)
 	}
-	if cfg.maxTokens > 0 {
-		args = append(args, "--max-tokens", fmt.Sprintf("%d", cfg.maxTokens))
+
+	// Extract text from response.
+	var result strings.Builder
+	for _, block := range msg.Content {
+		if block.Type == "text" {
+			result.WriteString(block.Text)
+		}
 	}
-	return args
+
+	text := strings.TrimSpace(result.String())
+	if text == "" {
+		return nil, fmt.Errorf("anthropic api: empty response (stop_reason: %s)", msg.StopReason)
+	}
+
+	return []byte(text), nil
 }
 
-// CheckAuth verifies the claude binary exists and auth is valid.
-// Returns nil if model is "off", "local", or "mock".
+// CheckAuth verifies the API key is set and valid.
 func (r *Runner) CheckAuth(ctx context.Context) error {
 	if r.Model == "off" || r.Model == "local" || r.Model == "mock" {
 		return nil
 	}
 
-	binary := r.BinaryPath
-	if binary == "" {
-		binary = "claude"
+	if os.Getenv("ANTHROPIC_API_KEY") == "" {
+		return ErrAuthExpired
 	}
 
-	if _, err := exec.LookPath(binary); err != nil {
-		return ErrBinaryMissing
-	}
-
-	cmd := exec.CommandContext(ctx, binary, "-p", "respond with ok", "--output-format", "text", "--max-turns", "1")
-	cmd.Dir = r.VaultPath
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		msg := stderr.String()
-		if bytes.Contains([]byte(msg), []byte("auth")) || bytes.Contains([]byte(msg), []byte("login")) || bytes.Contains([]byte(msg), []byte("token")) || bytes.Contains([]byte(msg), []byte("expired")) {
-			return ErrAuthExpired
-		}
-		return fmt.Errorf("claude check failed: %w: %s", err, msg)
+	// Quick API call to verify key works.
+	_, err := r.Run(ctx, "respond with ok", WithMaxTokens(10))
+	if err != nil {
+		return fmt.Errorf("auth check: %w", err)
 	}
 	return nil
-}
-
-func (r *Runner) buildOllamaArgs(cfg *runConfig) []string {
-	model := "llama3"
-	args := []string{"run", model, "--format", "json"}
-	return args
 }

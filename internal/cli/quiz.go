@@ -91,11 +91,7 @@ func quizRun(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build quiz items.
-	runner := &llm.Runner{
-		BinaryPath: "claude",
-		Model:      c.Model,
-		VaultPath:  c.VaultPath,
-	}
+	runner := llm.NewRunner(c.Model, c.VaultPath)
 
 	items := make([]quiz.QuizItem, 0, len(queue))
 	for _, n := range queue {

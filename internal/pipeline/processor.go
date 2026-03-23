@@ -30,9 +30,14 @@ type Processor struct {
 	MaxRetries   int            // default 2
 }
 
-// Process runs the full pipeline for a single file in _inbox/.
+// Process runs the full pipeline for a single file or capture bundle in _inbox/.
 func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 	start := time.Now()
+
+	// Check if this is a capture bundle (directory with manifest.yml).
+	if IsBundle(inboxPath) {
+		return p.processBundle(ctx, inboxPath, start)
+	}
 
 	// 1. Move to _processing/.
 	procPath, err := p.moveToProcessing(inboxPath)
@@ -154,6 +159,153 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 	return nil
 }
 
+// processBundle handles a capture session directory with manifest.yml.
+func (p *Processor) processBundle(ctx context.Context, inboxPath string, start time.Time) error {
+	// Move entire directory to _processing/.
+	procDir := filepath.Join(p.VaultPath, "_processing")
+	if err := vault.EnsureDir(procDir); err != nil {
+		return fmt.Errorf("ensure processing dir: %w", err)
+	}
+	bundleDir := filepath.Join(procDir, filepath.Base(inboxPath))
+	if err := os.Rename(inboxPath, bundleDir); err != nil {
+		return fmt.Errorf("move bundle to processing: %w", err)
+	}
+
+	bundle, err := LoadBundle(bundleDir)
+	if err != nil {
+		return fmt.Errorf("load bundle: %w", err)
+	}
+
+	if p.Runner.Model == "off" {
+		// Write text content as raw note.
+		text := BundleTextContent(bundle)
+		if text == "" {
+			text = "(capture session with screenshots only)"
+		}
+		raw := fmt.Sprintf("---\nsource: capture-session\n---\n\n%s\n", text)
+		return p.writeRawDirect(raw, bundleDir)
+	}
+
+	// Build prompt with text content and screenshot references.
+	prompt := BuildBundlePrompt(bundle, bundleDir)
+
+	// Collect screenshot paths for Claude vision.
+	var imagePaths []string
+	for _, item := range bundle.Items {
+		if item.Type == "screenshot" {
+			imagePaths = append(imagePaths, filepath.Join(bundleDir, item.File))
+		}
+	}
+
+	maxRetries := p.MaxRetries
+	if maxRetries == 0 {
+		maxRetries = 2
+	}
+
+	// Structure with retry.
+	var structured *StructuredNote
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		opts := []llm.RunOption{llm.WithSystemPrompt(StructuringSystemPrompt)}
+		if len(imagePaths) > 0 {
+			opts = append(opts, llm.WithImages(imagePaths))
+		}
+
+		out, err := p.Runner.Run(ctx, prompt, opts...)
+		if err != nil {
+			return fmt.Errorf("llm call for bundle: %w", err)
+		}
+		out = stripCodeFences(out)
+
+		note, err := ParseStructuredJSON(out)
+		if err != nil {
+			if attempt < maxRetries {
+				log.Printf("warn: bundle parse failed (attempt %d): %v", attempt+1, err)
+				continue
+			}
+			return fmt.Errorf("parse bundle after %d attempts: %w", attempt+1, err)
+		}
+		structured = note
+		break
+	}
+
+	// Resolve taxonomy.
+	if p.Taxonomy != nil {
+		structured.Domain = p.Taxonomy.ResolveDomain(structured.Domain)
+		structured.Tags = p.Taxonomy.ResolveTags(structured.Tags)
+	}
+
+	// Create processed note.
+	processed := &ProcessedNote{
+		StructuredNote: *structured,
+		ID:             GenerateID(),
+		Source:         "capture-session",
+		Box:            bundle.Box,
+		Phase:          bundle.Phase,
+		Created:        time.Now().UTC(),
+	}
+
+	// Route and write note.
+	dir, filename := Route(processed)
+	destDir := filepath.Join(p.VaultPath, dir)
+	if err := vault.EnsureDir(destDir); err != nil {
+		return fmt.Errorf("ensure dir %s: %w", dir, err)
+	}
+
+	destPath := filepath.Join(destDir, filename)
+	content := BuildNoteContent(processed)
+
+	// Copy screenshots to the note's directory.
+	for _, item := range bundle.Items {
+		if item.Type == "screenshot" {
+			src := filepath.Join(bundleDir, item.File)
+			dst := filepath.Join(destDir, item.File)
+			if data, err := os.ReadFile(src); err == nil {
+				os.WriteFile(dst, data, 0o644)
+			}
+		}
+	}
+
+	if err := atomicWrite(destPath, content); err != nil {
+		return fmt.Errorf("write note: %w", err)
+	}
+
+	relPath := filepath.Join(dir, filename)
+	log.Printf("ngram: structured bundle %s → %s (%d items)", processed.ID, relPath, len(bundle.Items))
+
+	// Index.
+	if p.SearchClient != nil {
+		doc := search.NoteDocument{
+			ID:          processed.ID,
+			Title:       processed.Title,
+			Body:        processed.Body,
+			Summary:     processed.Summary,
+			Tags:        processed.Tags,
+			Domain:      processed.Domain,
+			ContentType: processed.ContentType,
+			Box:         processed.Box,
+			Phase:       processed.Phase,
+			FilePath:    relPath,
+			Captured:    processed.Created.Unix(),
+		}
+		if err := p.SearchClient.IndexNote(doc); err != nil {
+			log.Printf("warn: index failed for %s: %v", processed.ID, err)
+		}
+	}
+
+	notify.Send("Ngram", fmt.Sprintf("Structured bundle: %s → %s", processed.Title, relPath))
+	p.gitCommit(relPath, processed.ID, "capture-session")
+
+	// Archive the bundle directory.
+	archiveDir := filepath.Join(p.VaultPath, "_archive")
+	vault.EnsureDir(archiveDir)
+	os.Rename(bundleDir, filepath.Join(archiveDir, filepath.Base(bundleDir)))
+
+	duration := time.Since(start).Milliseconds()
+	p.logUsage(processed.ID, "processor-bundle", duration)
+
+	return nil
+}
+
 func (p *Processor) moveToProcessing(path string) (string, error) {
 	procDir := filepath.Join(p.VaultPath, "_processing")
 	if err := vault.EnsureDir(procDir); err != nil {
@@ -170,7 +322,7 @@ func (p *Processor) structureWithRetry(ctx context.Context, rawBody string, maxR
 	prompt := BuildStructuringPrompt(p.Taxonomy, rawBody)
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		out, err := p.Runner.Run(ctx, prompt, llm.WithJSONSchema(StructuredNoteSchema))
+		out, err := p.Runner.Run(ctx, prompt, llm.WithSystemPrompt(StructuringSystemPrompt))
 		if err != nil {
 			if errors.Is(err, llm.ErrModelOff) {
 				return nil, err

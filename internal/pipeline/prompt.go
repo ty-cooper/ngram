@@ -44,43 +44,54 @@ const StructuredNoteSchema = `{
   "additionalProperties": false
 }`
 
-// BuildStructuringPrompt creates the prompt sent to Claude for structuring a raw note.
+// StructuringSystemPrompt is passed via --system-prompt to hard-enforce JSON output.
+const StructuringSystemPrompt = `You are a note structuring engine. You receive raw text or screenshot descriptions and output a single JSON object. You NEVER output anything except valid JSON. No commentary. No explanation. No preamble. No markdown fences. No trailing text. Your entire response must be parseable by JSON.parse().
+
+The JSON object must have these fields:
+{
+  "title": "concise descriptive title",
+  "summary": "one line, under 120 chars",
+  "body": "structured markdown content",
+  "content_type": "knowledge|reference|log|link|media",
+  "domain": "knowledge domain",
+  "topic_cluster": "specific topic within domain",
+  "tags": ["tag1", "tag2"]
+}
+
+WRITING RULES for body content:
+- Google developer documentation style
+- Declarative voice. Present tense. Active voice
+- No em dashes
+- No filler words: basically, essentially, actually, interestingly, simply, just, really
+- No weak starters: "It is", "There are", "This is", "Note that"
+- Minimum words for maximum information transfer
+- All commands in fenced code blocks with language identifier
+
+CONTENT TYPE RULES:
+- knowledge: study notes, concepts, explanations (gets quizzed)
+- reference: checklists, configs, recipes, bookmarks (not quizzed)
+- log: engagement logs, command output, findings (not quizzed)
+- link: saved URLs with description (not quizzed)
+- media: screenshots, images with description (not quizzed)
+
+If the input is trivial (a single word, typo, or test), still produce valid JSON with your best interpretation.`
+
+// BuildStructuringPrompt creates the user prompt sent to Claude.
+// The system prompt (StructuringSystemPrompt) enforces JSON output format.
 func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string) string {
 	var b strings.Builder
 
-	b.WriteString("You receive a raw note or screenshot. Make sense of what the user was attempting to say. ")
-	b.WriteString("Add missing context ONLY if that context is crucial to understanding the note. ")
-	b.WriteString("Keep the note atomic. Use web search if you need context to accurately structure the content.\n\n")
-
-	b.WriteString("Output ONLY the JSON note object. No commentary. No explanation. No preamble. No markdown fences.\n\n")
-
-	b.WriteString("WRITING RULES (non negotiable):\n")
-	b.WriteString("- Google developer documentation style.\n")
-	b.WriteString("- Declarative voice. Present tense. Active voice.\n")
-	b.WriteString("- No em dashes anywhere in the output.\n")
-	b.WriteString("- No filler: basically, essentially, actually, interestingly, in order to, simply, just, really, important, key, crucial, significant.\n")
-	b.WriteString("- No weak starters: \"It is\", \"There are\", \"There is\", \"This is\", \"Note that\".\n")
-	b.WriteString("- Minimum words for maximum information transfer.\n")
-	b.WriteString("- One concept per sentence. One topic per paragraph.\n")
-	b.WriteString("- All commands in fenced code blocks with language identifier.\n")
-	b.WriteString("- Summary must be under 120 characters.\n\n")
+	b.WriteString("Structure this raw note into a JSON object. Add missing context ONLY if crucial. Keep it atomic.\n\n")
 
 	// Inject taxonomy.
 	if domains := tax.CanonicalDomainList(); len(domains) > 0 {
 		fmt.Fprintf(&b, "CANONICAL DOMAINS: %s\n", strings.Join(domains, ", "))
-		b.WriteString("Use one of these domains if the content matches. Propose a new domain only if none fit.\n\n")
+		b.WriteString("Use one of these if the content matches. Propose a new domain only if none fit.\n\n")
 	}
 	if tags := tax.CanonicalTagList(); len(tags) > 0 {
 		fmt.Fprintf(&b, "CANONICAL TAGS: %s\n", strings.Join(tags, ", "))
 		b.WriteString("Use canonical tags when applicable. You may propose new tags.\n\n")
 	}
-
-	b.WriteString("CONTENT TYPE RULES:\n")
-	b.WriteString("- knowledge: study notes, concepts, explanations (gets quizzed)\n")
-	b.WriteString("- reference: checklists, configs, recipes, bookmarks (not quizzed)\n")
-	b.WriteString("- log: engagement logs, command output, findings (not quizzed)\n")
-	b.WriteString("- link: saved URLs with description (not quizzed)\n")
-	b.WriteString("- media: screenshots, images with description (not quizzed)\n\n")
 
 	b.WriteString("RAW NOTE:\n")
 	b.WriteString(rawContent)
