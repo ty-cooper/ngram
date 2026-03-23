@@ -1,15 +1,16 @@
 import SwiftUI
 
-struct MixedSessionView: View {
+struct CaptureSessionView: View {
     @ObservedObject var manager: CaptureSessionManager
     let onDismiss: () -> Void
     @State private var textInput = ""
+    @FocusState private var textFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text("Capture Session")
+                Text("Ngram Capture")
                     .font(.headline)
                 Spacer()
                 Text("\(manager.items.count) items")
@@ -61,14 +62,18 @@ struct MixedSessionView: View {
             HStack {
                 TextField("Add text...", text: $textInput)
                     .textFieldStyle(.plain)
+                    .focused($textFocused)
                     .onSubmit {
-                        manager.addText(textInput)
-                        textInput = ""
+                        if !textInput.trimmingCharacters(in: .whitespaces).isEmpty {
+                            manager.addText(textInput)
+                            textInput = ""
+                        }
                     }
 
                 Button("Add") {
                     manager.addText(textInput)
                     textInput = ""
+                    textFocused = true
                 }
                 .disabled(textInput.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -90,14 +95,13 @@ struct MixedSessionView: View {
 
                 Spacer()
 
-                Button("Abort") {
+                Button("Cancel") {
                     manager.abort()
                     onDismiss()
                 }
                 .keyboardShortcut(.escape, modifiers: [])
 
-                Button("Finish") {
-                    // Flush any pending text before finishing.
+                Button("Save") {
                     let pending = textInput.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !pending.isEmpty {
                         manager.addText(pending)
@@ -110,10 +114,11 @@ struct MixedSessionView: View {
                 }
                 .keyboardShortcut(.return, modifiers: .command)
                 .buttonStyle(.borderedProminent)
+                .disabled(manager.items.isEmpty && textInput.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding()
         }
         .frame(width: 480, height: 430)
+        .onAppear { textFocused = true }
     }
-
 }
