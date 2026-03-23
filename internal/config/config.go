@@ -61,14 +61,6 @@ func Load() (*Config, error) {
 
 	cfg.VaultPath = expandHome(cfg.VaultPath, home)
 
-	info, err := os.Stat(cfg.VaultPath)
-	if err != nil {
-		return nil, fmt.Errorf("vault path %q: %w", cfg.VaultPath, err)
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("vault path %q is not a directory", cfg.VaultPath)
-	}
-
 	return &cfg, nil
 }
 
