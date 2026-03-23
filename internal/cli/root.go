@@ -48,6 +48,7 @@ func init() {
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(engageCmd)
 	rootCmd.AddCommand(disengageCmd)
+	rootCmd.AddCommand(askCmd)
 }
 
 func Execute() error {
