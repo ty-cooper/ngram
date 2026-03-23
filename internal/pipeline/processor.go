@@ -254,19 +254,29 @@ func (p *Processor) processBundle(ctx context.Context, inboxPath string, start t
 		return fmt.Errorf("ensure dir %s: %w", dir, err)
 	}
 
-	destPath := filepath.Join(destDir, filename)
-	content := BuildNoteContent(processed)
-
-	// Copy screenshots to the note's directory.
+	// Embed screenshots in the note body and copy files alongside the note.
+	var screenshots []string
 	for _, item := range bundle.Items {
 		if item.Type == "screenshot" {
 			src := filepath.Join(bundleDir, item.File)
 			dst := filepath.Join(destDir, item.File)
 			if data, err := os.ReadFile(src); err == nil {
 				os.WriteFile(dst, data, 0o644)
+				screenshots = append(screenshots, item.File)
 			}
 		}
 	}
+	if len(screenshots) > 0 {
+		var embeds strings.Builder
+		embeds.WriteString("\n\n## Screenshots\n\n")
+		for _, ss := range screenshots {
+			fmt.Fprintf(&embeds, "![[%s]]\n\n", ss)
+		}
+		processed.Body += embeds.String()
+	}
+
+	destPath := filepath.Join(destDir, filename)
+	content := BuildNoteContent(processed)
 
 	if err := atomicWrite(destPath, content); err != nil {
 		return fmt.Errorf("write note: %w", err)
