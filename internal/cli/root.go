@@ -58,6 +58,8 @@ func init() {
 	rootCmd.AddCommand(amendCmd)
 	rootCmd.AddCommand(editCmd)
 	rootCmd.AddCommand(domainsCmd)
+	rootCmd.AddCommand(newCmd)
+	rootCmd.AddCommand(ssCmd)
 }
 
 func Execute() error {
