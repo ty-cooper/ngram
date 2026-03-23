@@ -370,6 +370,11 @@ func stripFrontmatter(content string) string {
 	return content
 }
 
+// StripCodeFencesExported is the exported version of stripCodeFences.
+func StripCodeFencesExported(data []byte) []byte {
+	return stripCodeFences(data)
+}
+
 // stripCodeFences removes markdown code fences wrapping JSON.
 func stripCodeFences(data []byte) []byte {
 	s := bytes.TrimSpace(data)

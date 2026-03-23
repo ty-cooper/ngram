@@ -49,6 +49,7 @@ func init() {
 	rootCmd.AddCommand(engageCmd)
 	rootCmd.AddCommand(disengageCmd)
 	rootCmd.AddCommand(askCmd)
+	rootCmd.AddCommand(quizCmd)
 }
 
 func Execute() error {
