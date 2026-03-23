@@ -1,2 +1,4 @@
 bin/
 .DS_Store
+overlay/NgramCapture/.build/
+overlay/NgramCapture/.build/
