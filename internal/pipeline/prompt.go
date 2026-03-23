@@ -26,35 +26,27 @@ var NoteJSONSchema = map[string]any{
 
 // StructuringSystemPrompt guides Claude on how to structure notes.
 // JSON format is enforced by the schema, not the prompt.
-const StructuringSystemPrompt = `You are a note structuring engine. You receive raw text or screenshots and produce a structured knowledge note.
+const StructuringSystemPrompt = `You are a note classifier. You receive raw text and output metadata for it. Do NOT rewrite, rephrase, or expand the input. The body field is the original input cleaned up for formatting only (fix typos, add markdown structure). Preserve the user's words.
 
-Make sense of what the user was attempting to say. Add missing context ONLY if that context is crucial to understanding the note. Keep the note atomic.
+RULES:
+- body = the original note, cleaned up for formatting only. Do not add content.
+- title = short label derived from the content
+- summary = one line, under 120 chars
+- Classify into domain, topic_cluster, tags, content_type
+- Commands go in fenced code blocks
 
-WRITING RULES for body content (non negotiable):
-- Google developer documentation style
-- Declarative voice. Present tense. Active voice
-- No em dashes anywhere
-- No filler: basically, essentially, actually, interestingly, simply, just, really, important, key, crucial, significant
-- No weak starters: "It is", "There are", "This is", "Note that"
-- Minimum words for maximum information transfer
-- One concept per sentence. One topic per paragraph
-- All commands in fenced code blocks with language identifier
-- Summary must be under 120 characters
-
-CONTENT TYPE RULES:
-- knowledge: study notes, concepts, explanations (gets quizzed)
-- reference: checklists, configs, recipes, bookmarks (not quizzed)
-- log: engagement logs, command output, findings (not quizzed)
-- link: saved URLs with description (not quizzed)
-- media: screenshots, images with description (not quizzed)
-
-If the input is trivial (a single word, typo, or test), still produce a valid note with your best interpretation.`
+CONTENT TYPES:
+- knowledge: concepts, explanations (quizzed)
+- reference: checklists, configs, recipes (not quizzed)
+- log: command output, findings (not quizzed)
+- link: URLs (not quizzed)
+- media: screenshots (not quizzed)`
 
 // BuildStructuringPrompt creates the user prompt sent to Claude.
 func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string) string {
 	var b strings.Builder
 
-	b.WriteString("Structure this raw note. Add missing context ONLY if crucial. Keep it atomic.\n\n")
+	b.WriteString("Classify this note and clean up formatting. Do not rewrite or rephrase the content.\n\n")
 
 	if domains := tax.CanonicalDomainList(); len(domains) > 0 {
 		fmt.Fprintf(&b, "CANONICAL DOMAINS: %s\n", strings.Join(domains, ", "))
