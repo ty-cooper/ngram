@@ -12,15 +12,13 @@ import (
 // noteSchema defines a single atomic note.
 var noteSchema = map[string]any{
 	"type":     "object",
-	"required": []string{"title", "summary", "body", "content_type", "domain", "topic_cluster", "tags"},
+	"required": []string{"title", "summary", "body", "content_type", "tags"},
 	"properties": map[string]any{
-		"title":         map[string]any{"type": "string", "description": "Concise descriptive title"},
-		"summary":       map[string]any{"type": "string", "description": "One line summary, under 120 characters"},
-		"body":          map[string]any{"type": "string", "description": "Structured markdown body with copyable command blocks using {{PLACEHOLDER}} syntax"},
-		"content_type":  map[string]any{"type": "string", "enum": []string{"knowledge", "reference", "log", "link", "media"}},
-		"domain":        map[string]any{"type": "string", "description": "Knowledge domain"},
-		"topic_cluster": map[string]any{"type": "string", "description": "Specific topic within the domain"},
-		"tags":          map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+		"title":        map[string]any{"type": "string", "description": "Concise descriptive title"},
+		"summary":      map[string]any{"type": "string", "description": "One line summary, under 120 characters"},
+		"body":         map[string]any{"type": "string", "description": "Structured markdown body with copyable command blocks using {{PLACEHOLDER}} syntax"},
+		"content_type": map[string]any{"type": "string", "enum": []string{"knowledge", "reference", "log", "link", "media"}},
+		"tags":         map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Tags for organization. Include domain and topic as tags."},
 	},
 	"additionalProperties": false,
 }
@@ -74,10 +72,10 @@ func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string, vaultPath
 		b.WriteString("Use canonical tags when applicable. You may propose new tags.\n\n")
 	}
 
-	// Inject existing domain/cluster paths so Claude reuses them.
+	// Inject existing tags from vault notes so Claude reuses them.
 	if len(vaultPath) > 0 && vaultPath[0] != "" {
-		if clusters := discoverClusters(vaultPath[0]); len(clusters) > 0 {
-			fmt.Fprintf(&b, "EXISTING CLUSTERS (reuse these, do not create near-duplicates):\n%s\n\n", strings.Join(clusters, "\n"))
+		if existing := discoverTags(vaultPath[0]); len(existing) > 0 {
+			fmt.Fprintf(&b, "EXISTING TAGS (reuse these, do not create near-duplicates):\n%s\n\n", strings.Join(existing, ", "))
 		}
 	}
 
@@ -87,29 +85,53 @@ func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string, vaultPath
 	return b.String()
 }
 
-// discoverClusters scans knowledge/{domain}/{cluster}/ directories.
-func discoverClusters(vaultPath string) []string {
-	knowledgeDir := filepath.Join(vaultPath, "knowledge")
-	domains, err := os.ReadDir(knowledgeDir)
+// discoverTags scans notes/ for existing tags in frontmatter.
+func discoverTags(vaultPath string) []string {
+	notesDir := filepath.Join(vaultPath, "notes")
+	entries, err := os.ReadDir(notesDir)
 	if err != nil {
 		return nil
 	}
-	var clusters []string
-	for _, d := range domains {
-		if !d.IsDir() || strings.HasPrefix(d.Name(), ".") {
+	tagSet := make(map[string]bool)
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".md") {
 			continue
 		}
-		subs, err := os.ReadDir(filepath.Join(knowledgeDir, d.Name()))
+		data, err := os.ReadFile(filepath.Join(notesDir, e.Name()))
 		if err != nil {
 			continue
 		}
-		for _, s := range subs {
-			if s.IsDir() && !strings.HasPrefix(s.Name(), ".") {
-				clusters = append(clusters, fmt.Sprintf("  %s / %s", d.Name(), s.Name()))
+		inFM := false
+		inTags := false
+		for _, line := range strings.Split(string(data), "\n") {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "---" {
+				if inFM {
+					break
+				}
+				inFM = true
+				continue
+			}
+			if !inFM {
+				continue
+			}
+			if trimmed == "tags:" {
+				inTags = true
+				continue
+			}
+			if inTags && strings.HasPrefix(trimmed, "- ") {
+				tag := strings.TrimPrefix(trimmed, "- ")
+				tagSet[tag] = true
+			} else if inTags {
+				inTags = false
 			}
 		}
 	}
-	return clusters
+	var tags []string
+	for t := range tagSet {
+		tags = append(tags, t)
+	}
+	return tags
 }
 
 // BuildRetryPrompt creates a prompt that includes previous violations.

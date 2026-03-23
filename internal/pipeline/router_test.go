@@ -1,81 +1,42 @@
 package pipeline
 
-import (
-	"path/filepath"
-	"testing"
-)
+import "testing"
 
-func TestRoute_Knowledge(t *testing.T) {
+func TestRoute_Flat(t *testing.T) {
 	note := &ProcessedNote{
 		StructuredNote: StructuredNote{
-			Title:        "Raft Leader Election",
-			ContentType:  "knowledge",
-			Domain:       "distributed-systems",
-			TopicCluster: "consensus",
+			Title:       "Raft Leader Election",
+			ContentType: "knowledge",
+			Tags:        []string{"distributed-systems", "consensus", "raft"},
 		},
 		ID: "a1b2c3d4",
 	}
 
 	dir, filename := Route(note)
-	wantDir := filepath.Join("knowledge", "distributed-systems", "consensus")
-	if dir != wantDir {
-		t.Errorf("dir = %q, want %q", dir, wantDir)
+	if dir != "notes" {
+		t.Errorf("dir = %q, want %q", dir, "notes")
 	}
-	if filename != "a1b2c3d4-raft-leader-election.md" {
-		t.Errorf("filename = %q", filename)
+	if filename != "a1b2c3d4.md" {
+		t.Errorf("filename = %q, want %q", filename, "a1b2c3d4.md")
 	}
 }
 
-func TestRoute_Box(t *testing.T) {
+func TestRoute_AlwaysFlat(t *testing.T) {
+	// Even box notes go to notes/ — box is a tag, not a folder.
 	note := &ProcessedNote{
 		StructuredNote: StructuredNote{
-			Title:       "Found SQLi on Login",
-			ContentType: "knowledge",
-			Domain:      "pentest",
+			Title: "Found SQLi",
+			Tags:  []string{"pentest", "sqli"},
 		},
-		ID:    "e5f6a7b8",
-		Box:   "optimum",
-		Phase: "exploit",
+		ID:  "e5f6a7b8",
+		Box: "optimum",
 	}
 
 	dir, filename := Route(note)
-	wantDir := filepath.Join("boxes", "optimum", "exploit")
-	if dir != wantDir {
-		t.Errorf("dir = %q, want %q", dir, wantDir)
+	if dir != "notes" {
+		t.Errorf("dir = %q, want %q", dir, "notes")
 	}
-	if filename != "e5f6a7b8-found-sqli-on-login.md" {
+	if filename != "e5f6a7b8.md" {
 		t.Errorf("filename = %q", filename)
-	}
-}
-
-func TestRoute_Defaults(t *testing.T) {
-	note := &ProcessedNote{
-		StructuredNote: StructuredNote{
-			Title:       "Random Note",
-			ContentType: "reference",
-		},
-		ID: "11223344",
-	}
-
-	dir, _ := Route(note)
-	wantDir := filepath.Join("knowledge", "general", "uncategorized")
-	if dir != wantDir {
-		t.Errorf("dir = %q, want %q", dir, wantDir)
-	}
-}
-
-func TestRoute_BoxNoPhase(t *testing.T) {
-	note := &ProcessedNote{
-		StructuredNote: StructuredNote{
-			Title: "Box Note",
-		},
-		ID:  "aabbccdd",
-		Box: "target",
-	}
-
-	dir, _ := Route(note)
-	wantDir := filepath.Join("boxes", "target", "unsorted")
-	if dir != wantDir {
-		t.Errorf("dir = %q, want %q", dir, wantDir)
 	}
 }

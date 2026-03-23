@@ -111,23 +111,14 @@ func deriveTitle(body string) string {
 	return line
 }
 
-// BuildFrontmatter generates the full COO-83 YAML frontmatter for a ProcessedNote.
+// BuildFrontmatter generates Zettelkasten YAML frontmatter.
 func BuildFrontmatter(n *ProcessedNote) string {
 	var b strings.Builder
 	b.WriteString("---\n")
-	fmt.Fprintf(&b, "id: %q\n", n.ID)
+	fmt.Fprintf(&b, "id: %s\n", n.ID)
 	fmt.Fprintf(&b, "title: %q\n", n.Title)
-	fmt.Fprintf(&b, "content_type: %q\n", n.ContentType)
-	fmt.Fprintf(&b, "created: %q\n", n.Created.UTC().Format(time.RFC3339))
-	fmt.Fprintf(&b, "modified: %q\n", n.Created.UTC().Format(time.RFC3339))
-	fmt.Fprintf(&b, "source: %q\n", n.Source)
-
-	if n.Domain != "" {
-		fmt.Fprintf(&b, "domain: %q\n", n.Domain)
-	}
-	if n.TopicCluster != "" {
-		fmt.Fprintf(&b, "topic_cluster: %q\n", n.TopicCluster)
-	}
+	fmt.Fprintf(&b, "created: %s\n", n.Created.UTC().Format(time.RFC3339))
+	fmt.Fprintf(&b, "type: %s\n", n.ContentType)
 
 	if len(n.Tags) > 0 {
 		b.WriteString("tags:\n")
@@ -137,64 +128,49 @@ func BuildFrontmatter(n *ProcessedNote) string {
 	}
 
 	if n.Box != "" {
-		fmt.Fprintf(&b, "box: %q\n", n.Box)
+		fmt.Fprintf(&b, "box: %s\n", n.Box)
 	}
 	if n.Phase != "" {
-		fmt.Fprintf(&b, "phase: %q\n", n.Phase)
+		fmt.Fprintf(&b, "phase: %s\n", n.Phase)
 	}
 
-	b.WriteString("related: []\n")
-
-	// Retention block per COO-83.
+	// Retention for quizzable notes.
 	if n.ContentType == "knowledge" {
 		b.WriteString("retention:\n")
 		b.WriteString("  state: new\n")
 		b.WriteString("  ease_factor: 2.5\n")
 		b.WriteString("  interval_days: 0\n")
-		b.WriteString("  repetition_count: 0\n")
-		b.WriteString("  lapse_count: 0\n")
-		b.WriteString("  streak: 0\n")
-		b.WriteString("  total_reviews: 0\n")
-		b.WriteString("  total_correct: 0\n")
-		b.WriteString("  retention_score: 0\n")
-		fmt.Fprintf(&b, "  next_review: %q\n", n.Created.Format("2006-01-02"))
-		b.WriteString("  last_reviewed: null\n")
+		fmt.Fprintf(&b, "  next_review: %s\n", n.Created.Format("2006-01-02"))
 	}
 
 	b.WriteString("---\n")
 	return b.String()
 }
 
-// BuildNoteContent returns the complete markdown: frontmatter + body + properties below page break.
+// BuildNoteContent returns Zettelkasten markdown: frontmatter + title + summary + body + tags.
 func BuildNoteContent(n *ProcessedNote) string {
 	var b strings.Builder
 	b.WriteString(BuildFrontmatter(n))
 	b.WriteString("\n")
+
+	// Title as H1.
+	fmt.Fprintf(&b, "# %s\n\n", n.Title)
+
 	if n.Summary != "" {
 		fmt.Fprintf(&b, "*%s*\n\n", n.Summary)
 	}
+
 	b.WriteString(n.Body)
 	b.WriteString("\n")
 
-	// Readable properties below page break.
+	// Tags and links below page break.
 	b.WriteString("\n---\n\n")
-	if n.Domain != "" {
-		fmt.Fprintf(&b, "**Domain:** %s", n.Domain)
-		if n.TopicCluster != "" {
-			fmt.Fprintf(&b, " / %s", n.TopicCluster)
-		}
-		b.WriteString("\n")
-	}
 	if len(n.Tags) > 0 {
-		fmt.Fprintf(&b, "**Tags:** %s\n", strings.Join(n.Tags, ", "))
-	}
-	fmt.Fprintf(&b, "**Type:** %s\n", n.ContentType)
-	if n.Box != "" {
-		fmt.Fprintf(&b, "**Box:** %s", n.Box)
-		if n.Phase != "" {
-			fmt.Fprintf(&b, " / %s", n.Phase)
+		var tagLinks []string
+		for _, tag := range n.Tags {
+			tagLinks = append(tagLinks, fmt.Sprintf("#%s", tag))
 		}
-		b.WriteString("\n")
+		fmt.Fprintf(&b, "%s\n", strings.Join(tagLinks, " "))
 	}
 
 	return b.String()

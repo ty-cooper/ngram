@@ -58,13 +58,11 @@ func TestParseStructuredJSON_DefaultContentType(t *testing.T) {
 func TestBuildFrontmatter_Knowledge(t *testing.T) {
 	note := &ProcessedNote{
 		StructuredNote: StructuredNote{
-			Title:        "Test Note",
-			ContentType:  "knowledge",
-			Domain:       "pentest",
-			TopicCluster: "recon",
-			Tags:         []string{"nmap", "scanning"},
-			Summary:      "A test note.",
-			Body:         "Body content.",
+			Title:       "Test Note",
+			ContentType: "knowledge",
+			Tags:        []string{"nmap", "scanning", "pentest"},
+			Summary:     "A test note.",
+			Body:        "Body content.",
 		},
 		ID:      "a1b2c3d4",
 		Source:  "terminal",
@@ -74,17 +72,15 @@ func TestBuildFrontmatter_Knowledge(t *testing.T) {
 	fm := BuildFrontmatter(note)
 
 	checks := []string{
-		`id: "a1b2c3d4"`,
+		"id: a1b2c3d4",
 		`title: "Test Note"`,
-		`content_type: "knowledge"`,
-		`domain: "pentest"`,
-		`topic_cluster: "recon"`,
+		"type: knowledge",
 		"  - nmap",
 		"  - scanning",
+		"  - pentest",
 		"retention:",
 		"  state: new",
 		"  ease_factor: 2.5",
-		"related: []",
 	}
 	for _, c := range checks {
 		if !strings.Contains(fm, c) {

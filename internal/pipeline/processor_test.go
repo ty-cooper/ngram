@@ -18,6 +18,7 @@ func TestProcess_MockModel(t *testing.T) {
 	// Create vault directories.
 	os.MkdirAll(filepath.Join(vaultDir, "_inbox"), 0o755)
 	os.MkdirAll(filepath.Join(vaultDir, "_meta"), 0o755)
+	os.MkdirAll(filepath.Join(vaultDir, "notes"), 0o755)
 
 	// Create a taxonomy file.
 	os.WriteFile(filepath.Join(vaultDir, "_meta", "taxonomy.yml"), []byte(`
@@ -83,7 +84,7 @@ election timeout fires, it transitions to candidate state.
 
 	// Verify structured note exists in knowledge/.
 	found := false
-	filepath.Walk(filepath.Join(vaultDir, "knowledge"), func(path string, info os.FileInfo, err error) error {
+	filepath.Walk(filepath.Join(vaultDir, "notes"), func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -91,8 +92,8 @@ election timeout fires, it transitions to candidate state.
 			found = true
 			content, _ := os.ReadFile(path)
 			s := string(content)
-			if !strings.Contains(s, `content_type: "knowledge"`) {
-				t.Errorf("missing content_type in structured note")
+			if !strings.Contains(s, "type: knowledge") {
+				t.Errorf("missing type in structured note")
 			}
 			if !strings.Contains(s, "retention:") {
 				t.Errorf("knowledge note should have retention block")
@@ -104,7 +105,7 @@ election timeout fires, it transitions to candidate state.
 		return nil
 	})
 	if !found {
-		t.Error("no structured note found in knowledge/")
+		t.Error("no structured note found in notes/")
 	}
 
 	// Verify API usage log.
