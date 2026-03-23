@@ -34,18 +34,34 @@ class CaptureSessionManager: ObservableObject {
         let filename = String(format: "ss-%03d.png", screenshotCount)
         let filepath = "\(sessionDir)/\(filename)"
 
-        let task = Process()
-        task.launchPath = "/usr/sbin/screencapture"
-        task.arguments = ["-i", filepath]
-        task.terminationHandler = { [weak self] process in
+        // Run screencapture synchronously on a background thread
+        // so the UI doesn't block but we can reliably check the result.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            task.arguments = ["-i", "-x", filepath] // -x = no sound
+            do {
+                try task.run()
+                task.waitUntilExit()
+            } catch {
+                DispatchQueue.main.async { completion() }
+                return
+            }
+
             DispatchQueue.main.async {
-                if process.terminationStatus == 0 && FileManager.default.fileExists(atPath: filepath) {
-                    self?.items.append(CaptureItem(type: .screenshot, timestamp: Date(), content: filename))
+                if task.terminationStatus == 0 && FileManager.default.fileExists(atPath: filepath) {
+                    // Verify it's not a 0-byte file (cancelled capture).
+                    let attrs = try? FileManager.default.attributesOfItem(atPath: filepath)
+                    let size = attrs?[.size] as? Int ?? 0
+                    if size > 0 {
+                        self?.items.append(CaptureItem(type: .screenshot, timestamp: Date(), content: filename))
+                    } else {
+                        try? FileManager.default.removeItem(atPath: filepath)
+                    }
                 }
                 completion()
             }
         }
-        task.launch()
     }
 
     func addText(_ text: String) {
