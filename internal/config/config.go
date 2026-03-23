@@ -12,6 +12,12 @@ type Config struct {
 	VaultPath   string            `mapstructure:"vault_path"`
 	Model       string            `mapstructure:"model"`
 	Meilisearch MeilisearchConfig `mapstructure:"meilisearch"`
+	API         APIConfig         `mapstructure:"api"`
+}
+
+type APIConfig struct {
+	MaxCallsPerDay int `mapstructure:"max_calls_per_day"`
+	WarnAtPercent  int `mapstructure:"warn_at_percent"`
 }
 
 type MeilisearchConfig struct {
@@ -32,6 +38,8 @@ func Load() (*Config, error) {
 	viper.SetDefault("model", "cloud")
 	viper.SetDefault("meilisearch.host", "http://127.0.0.1:7700")
 	viper.SetDefault("meilisearch.api_key", "")
+	viper.SetDefault("api.max_calls_per_day", 100)
+	viper.SetDefault("api.warn_at_percent", 80)
 
 	viper.SetEnvPrefix("NGRAM")
 	viper.BindEnv("vault_path")
