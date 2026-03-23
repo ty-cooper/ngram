@@ -50,6 +50,11 @@ func init() {
 	rootCmd.AddCommand(disengageCmd)
 	rootCmd.AddCommand(askCmd)
 	rootCmd.AddCommand(quizCmd)
+	rootCmd.AddCommand(migrateCmd)
+	rootCmd.AddCommand(captureOnCmd)
+	rootCmd.AddCommand(captureOffCmd)
+	rootCmd.AddCommand(reportCmd)
+	rootCmd.AddCommand(verifyCmd)
 }
 
 func Execute() error {
