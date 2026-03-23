@@ -67,94 +67,90 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 		maxRetries = 2
 	}
 
-	structured, err := p.structureWithRetry(ctx, body, maxRetries)
+	notes, err := p.structureWithRetry(ctx, body, maxRetries)
 	if err != nil {
-		// On total failure, leave in _processing/ for manual review.
 		return fmt.Errorf("structure: %w", err)
 	}
 
-	// 7. Resolve taxonomy.
-	if p.Taxonomy != nil {
-		structured.Domain = p.Taxonomy.ResolveDomain(structured.Domain)
-		structured.Tags = p.Taxonomy.ResolveTags(structured.Tags)
-	}
-
-	// 8. Dedup check.
-	if p.Dedup != nil {
-		result := p.Dedup.Check(ctx, structured, procPath)
-		switch result.Action {
-		case "duplicate":
-			log.Printf("ngram: dedup — duplicate of %s", result.TargetID)
-			return p.archiveRaw(procPath)
-		case "appended":
-			log.Printf("ngram: dedup — appended to %s", result.TargetID)
-			p.gitCommit(result.TargetID, result.TargetID, "append")
-			return p.archiveRaw(procPath)
+	// Process each atomic note.
+	for _, structured := range notes {
+		// Resolve taxonomy.
+		if p.Taxonomy != nil {
+			structured.Domain = p.Taxonomy.ResolveDomain(structured.Domain)
+			structured.Tags = p.Taxonomy.ResolveTags(structured.Tags)
 		}
-		// "proceed" — continue with normal pipeline.
-	}
 
-	// 9. Create ProcessedNote.
-	processed := &ProcessedNote{
-		StructuredNote: *structured,
-		ID:             GenerateID(),
-		Source:         source,
-		Box:            box,
-		Phase:          phase,
-		Created:        time.Now().UTC(),
-	}
-
-	// 9. Route and write.
-	dir, filename := Route(processed)
-	destDir := filepath.Join(p.VaultPath, dir)
-	if err := vault.EnsureDir(destDir); err != nil {
-		return fmt.Errorf("ensure dir %s: %w", dir, err)
-	}
-
-	destPath := filepath.Join(destDir, filename)
-	content := BuildNoteContent(processed)
-
-	if err := atomicWrite(destPath, content); err != nil {
-		return fmt.Errorf("write note: %w", err)
-	}
-
-	relPath := filepath.Join(dir, filename)
-	log.Printf("ngram: structured %s → %s", processed.ID, relPath)
-
-	// 10. Index in Meilisearch.
-	if p.SearchClient != nil {
-		doc := search.NoteDocument{
-			ID:          processed.ID,
-			Title:       processed.Title,
-			Body:        processed.Body,
-			Summary:     processed.Summary,
-			Tags:        processed.Tags,
-			Domain:      processed.Domain,
-			ContentType: processed.ContentType,
-			Box:         processed.Box,
-			Phase:       processed.Phase,
-			FilePath:    relPath,
-			Captured:    processed.Created.Unix(),
+		// Dedup check.
+		if p.Dedup != nil {
+			result := p.Dedup.Check(ctx, structured, procPath)
+			switch result.Action {
+			case "duplicate":
+				log.Printf("ngram: dedup — duplicate of %s", result.TargetID)
+				continue
+			case "appended":
+				log.Printf("ngram: dedup — appended to %s", result.TargetID)
+				p.gitCommit(result.TargetID, result.TargetID, "append")
+				continue
+			}
 		}
-		if err := p.SearchClient.IndexNote(doc); err != nil {
-			log.Printf("warn: index failed for %s: %v", processed.ID, err)
+
+		processed := &ProcessedNote{
+			StructuredNote: *structured,
+			ID:             GenerateID(),
+			Source:         source,
+			Box:            box,
+			Phase:          phase,
+			Created:        time.Now().UTC(),
 		}
+
+		dir, filename := Route(processed)
+		destDir := filepath.Join(p.VaultPath, dir)
+		if err := vault.EnsureDir(destDir); err != nil {
+			log.Printf("warn: ensure dir %s: %v", dir, err)
+			continue
+		}
+
+		destPath := filepath.Join(destDir, filename)
+		content := BuildNoteContent(processed)
+
+		if err := atomicWrite(destPath, content); err != nil {
+			log.Printf("warn: write note: %v", err)
+			continue
+		}
+
+		relPath := filepath.Join(dir, filename)
+		log.Printf("ngram: structured %s → %s", processed.ID, relPath)
+
+		if p.SearchClient != nil {
+			doc := search.NoteDocument{
+				ID:          processed.ID,
+				Title:       processed.Title,
+				Body:        processed.Body,
+				Summary:     processed.Summary,
+				Tags:        processed.Tags,
+				Domain:      processed.Domain,
+				ContentType: processed.ContentType,
+				Box:         processed.Box,
+				Phase:       processed.Phase,
+				FilePath:    relPath,
+				Captured:    processed.Created.Unix(),
+			}
+			if err := p.SearchClient.IndexNote(doc); err != nil {
+				log.Printf("warn: index failed for %s: %v", processed.ID, err)
+			}
+		}
+
+		p.gitCommit(relPath, processed.ID, source)
 	}
 
-	// 11. Desktop notification.
-	notify.Send("Ngram", fmt.Sprintf("Structured: %s → %s", processed.Title, relPath))
+	notify.Send("Ngram", fmt.Sprintf("Structured %d note(s) from input", len(notes)))
 
-	// 12. Git commit.
-	p.gitCommit(relPath, processed.ID, source)
-
-	// 12. Archive raw.
 	if err := p.archiveRaw(procPath); err != nil {
 		log.Printf("warn: archive failed: %v", err)
 	}
 
-	// 13. Log usage.
 	duration := time.Since(start).Milliseconds()
-	p.logUsage(processed.ID, "processor", duration)
+	p.logUsage("batch", "processor", duration)
 
 	return nil
 }
@@ -331,7 +327,7 @@ func (p *Processor) moveToProcessing(path string) (string, error) {
 	return dest, nil
 }
 
-func (p *Processor) structureWithRetry(ctx context.Context, rawBody string, maxRetries int) (*StructuredNote, error) {
+func (p *Processor) structureWithRetry(ctx context.Context, rawBody string, maxRetries int) ([]*StructuredNote, error) {
 	prompt := BuildStructuringPrompt(p.Taxonomy, rawBody)
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
@@ -346,10 +342,9 @@ func (p *Processor) structureWithRetry(ctx context.Context, rawBody string, maxR
 			return nil, fmt.Errorf("llm call (attempt %d): %w", attempt+1, err)
 		}
 
-		// Strip code fences just in case.
 		out = stripCodeFences(out)
 
-		note, err := ParseStructuredJSON(out)
+		notes, err := ParseStructuredNotes(out)
 		if err != nil {
 			if attempt < maxRetries {
 				log.Printf("warn: parse failed (attempt %d), retrying: %v", attempt+1, err)
@@ -359,20 +354,7 @@ func (p *Processor) structureWithRetry(ctx context.Context, rawBody string, maxR
 			return nil, fmt.Errorf("parse after %d attempts: %w", attempt+1, err)
 		}
 
-		violations := Lint(note)
-		if len(violations) == 0 {
-			return note, nil
-		}
-
-		if attempt < maxRetries {
-			log.Printf("warn: lint violations (attempt %d): %s", attempt+1, FormatViolations(violations))
-			prompt = BuildRetryPrompt(p.Taxonomy, rawBody, violations, note)
-			continue
-		}
-
-		// Final attempt still has violations — proceed anyway with warning.
-		log.Printf("warn: proceeding with %d lint violations after %d retries", len(violations), maxRetries)
-		return note, nil
+		return notes, nil
 	}
 
 	return nil, fmt.Errorf("unreachable")

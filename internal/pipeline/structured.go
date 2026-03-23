@@ -39,45 +39,57 @@ func GenerateID() string {
 
 // ParseStructuredJSON parses Claude's JSON response into a StructuredNote.
 // Handles both raw JSON and the Claude Code envelope {"type":"result","result":"..."}.
-func ParseStructuredJSON(data []byte) (*StructuredNote, error) {
+// ParseStructuredNotes parses the {"notes": [...]} response from the API.
+// Returns one or more atomic notes.
+func ParseStructuredNotes(data []byte) ([]*StructuredNote, error) {
 	data = stripCodeFences(data)
 
-	// Check if this is a Claude Code envelope.
-	var envelope struct {
-		Type   string          `json:"type"`
-		Result json.RawMessage `json:"result"`
+	var wrapper struct {
+		Notes []StructuredNote `json:"notes"`
 	}
-	if err := json.Unmarshal(data, &envelope); err == nil && envelope.Type == "result" && len(envelope.Result) > 0 {
-		// Result may be a JSON string or a JSON object.
-		var resultStr string
-		if err := json.Unmarshal(envelope.Result, &resultStr); err == nil {
-			// It's a string — parse the inner JSON.
-			data = stripCodeFences([]byte(resultStr))
-		} else {
-			// It's already a JSON object.
-			data = []byte(envelope.Result)
-		}
-	}
-
-	var note StructuredNote
-	if err := json.Unmarshal(data, &note); err != nil {
+	if err := json.Unmarshal(data, &wrapper); err != nil {
 		return nil, fmt.Errorf("parse structured json: %w", err)
 	}
-	if note.Body == "" && note.Title == "" {
-		return nil, fmt.Errorf("structured note: empty response from LLM")
+	if len(wrapper.Notes) == 0 {
+		return nil, fmt.Errorf("structured notes: empty response from LLM")
 	}
-	// If no title, derive from body (first 60 chars).
-	if note.Title == "" {
-		note.Title = deriveTitle(note.Body)
+
+	var result []*StructuredNote
+	for i := range wrapper.Notes {
+		note := &wrapper.Notes[i]
+		if note.Title == "" {
+			note.Title = deriveTitle(note.Body)
+		}
+		if note.Body == "" {
+			note.Body = note.Title
+		}
+		if note.ContentType == "" {
+			note.ContentType = "knowledge"
+		}
+		result = append(result, note)
 	}
-	// If no body, use the title as body.
-	if note.Body == "" {
-		note.Body = note.Title
+	return result, nil
+}
+
+// ParseStructuredJSON parses a single note. Kept for backward compat with tests.
+func ParseStructuredJSON(data []byte) (*StructuredNote, error) {
+	notes, err := ParseStructuredNotes(data)
+	if err != nil {
+		// Fall back to single-note parse for old format.
+		data = stripCodeFences(data)
+		var note StructuredNote
+		if err2 := json.Unmarshal(data, &note); err2 != nil {
+			return nil, fmt.Errorf("parse structured json: %w", err2)
+		}
+		if note.Title == "" {
+			note.Title = deriveTitle(note.Body)
+		}
+		if note.ContentType == "" {
+			note.ContentType = "knowledge"
+		}
+		return &note, nil
 	}
-	if note.ContentType == "" {
-		note.ContentType = "knowledge"
-	}
-	return &note, nil
+	return notes[0], nil
 }
 
 // deriveTitle creates a title from body content.

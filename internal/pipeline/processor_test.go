@@ -57,7 +57,7 @@ election timeout fires, it transitions to candidate state.
 
 	proc := &Processor{
 		VaultPath: vaultDir,
-		Runner: llm.NewMockRunner([]byte(`{"title":"Raft Leader Election","summary":"Raft leader election mechanism.","body":"Raft consensus uses leader election.","content_type":"knowledge","domain":"distributed-systems","topic_cluster":"consensus","tags":["raft","consensus"]}`)),
+		Runner: llm.NewMockRunner([]byte(`{"notes":[{"title":"Raft Leader Election","summary":"Raft leader election mechanism.","body":"Raft consensus uses leader election.","content_type":"knowledge","domain":"distributed-systems","topic_cluster":"consensus","tags":["raft","consensus"]}]}`)),
 		Taxonomy:   tax,
 		MaxRetries: 0,
 	}
