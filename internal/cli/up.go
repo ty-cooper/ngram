@@ -92,11 +92,21 @@ func upRun(cmd *cobra.Command, args []string) error {
 		fmt.Println("✓")
 	}
 
+	var dedup *pipeline.Deduplicator
+	if searchClient != nil {
+		dedup = &pipeline.Deduplicator{
+			VaultPath:    c.VaultPath,
+			SearchClient: searchClient,
+			Runner:       runner,
+		}
+	}
+
 	proc := &pipeline.Processor{
 		VaultPath:    c.VaultPath,
 		Runner:       runner,
 		Taxonomy:     tax,
 		SearchClient: searchClient,
+		Dedup:        dedup,
 		MaxRetries:   2,
 	}
 
