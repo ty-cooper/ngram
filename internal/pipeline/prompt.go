@@ -7,6 +7,43 @@ import (
 	"github.com/ty-cooper/ngram/internal/taxonomy"
 )
 
+// StructuredNoteSchema is the JSON schema passed to claude --json-schema.
+const StructuredNoteSchema = `{
+  "type": "object",
+  "required": ["title", "summary", "body", "content_type", "domain", "topic_cluster", "tags"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Concise descriptive title generated from the content"
+    },
+    "summary": {
+      "type": "string",
+      "description": "One line summary, under 120 characters"
+    },
+    "body": {
+      "type": "string",
+      "description": "Structured markdown content"
+    },
+    "content_type": {
+      "type": "string",
+      "enum": ["knowledge", "reference", "log", "link", "media"]
+    },
+    "domain": {
+      "type": "string",
+      "description": "Knowledge domain"
+    },
+    "topic_cluster": {
+      "type": "string",
+      "description": "Specific topic within the domain"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": false
+}`
+
 // BuildStructuringPrompt creates the prompt sent to Claude for structuring a raw note.
 func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string) string {
 	var b strings.Builder
@@ -41,18 +78,7 @@ func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string) string {
 	b.WriteString("- link: saved URLs with description (not quizzed)\n")
 	b.WriteString("- media: screenshots, images with description (not quizzed)\n\n")
 
-	b.WriteString("Return ONLY valid JSON matching this schema:\n")
-	b.WriteString("```json\n")
-	b.WriteString(`{
-  "title": "concise descriptive title (generate from content, never empty)",
-  "summary": "one line, under 120 chars",
-  "body": "structured markdown content",
-  "content_type": "knowledge|reference|log|link|media",
-  "domain": "domain name",
-  "topic_cluster": "specific topic within domain",
-  "tags": ["tag1", "tag2"]
-}`)
-	b.WriteString("\n```\n\n")
+	b.WriteString("Return valid JSON matching the structured note schema. Always generate a title from the content.\n\n")
 
 	b.WriteString("RAW NOTE:\n")
 	b.WriteString(rawContent)

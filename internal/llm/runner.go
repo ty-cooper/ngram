@@ -23,6 +23,7 @@ type Runner struct {
 
 type runConfig struct {
 	systemPrompt string
+	jsonSchema   string
 	maxTokens    int
 }
 
@@ -35,6 +36,10 @@ func WithSystemPrompt(prompt string) RunOption {
 
 func WithMaxTokens(n int) RunOption {
 	return func(c *runConfig) { c.maxTokens = n }
+}
+
+func WithJSONSchema(schema string) RunOption {
+	return func(c *runConfig) { c.jsonSchema = schema }
 }
 
 // Run executes the LLM binary with a prompt and returns stdout.
@@ -89,6 +94,9 @@ func (r *Runner) buildClaudeArgs(prompt string, cfg *runConfig) []string {
 	args := []string{"-p", prompt, "--output-format", "json"}
 	if cfg.systemPrompt != "" {
 		args = append(args, "--system-prompt", cfg.systemPrompt)
+	}
+	if cfg.jsonSchema != "" {
+		args = append(args, "--json-schema", cfg.jsonSchema)
 	}
 	if cfg.maxTokens > 0 {
 		args = append(args, "--max-tokens", fmt.Sprintf("%d", cfg.maxTokens))

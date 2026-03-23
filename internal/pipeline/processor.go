@@ -170,7 +170,7 @@ func (p *Processor) structureWithRetry(ctx context.Context, rawBody string, maxR
 	prompt := BuildStructuringPrompt(p.Taxonomy, rawBody)
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		out, err := p.Runner.Run(ctx, prompt)
+		out, err := p.Runner.Run(ctx, prompt, llm.WithJSONSchema(StructuredNoteSchema))
 		if err != nil {
 			if errors.Is(err, llm.ErrModelOff) {
 				return nil, err
