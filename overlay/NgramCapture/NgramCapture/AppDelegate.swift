@@ -15,14 +15,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Capture (⌘⇧N)", action: #selector(showCapturePicker), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Capture (⌘⌥N)", action: #selector(showCapturePicker), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
 
         // Global hotkey: Cmd+Shift+N
         hotKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.modifierFlags.contains([.command, .shift]) && event.keyCode == 45 { // N
+            if event.modifierFlags.contains([.command, .option]) && event.keyCode == 45 { // N
                 DispatchQueue.main.async {
                     self?.showCapturePicker()
                 }
@@ -31,7 +31,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Also monitor local events (when app is focused).
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.modifierFlags.contains([.command, .shift]) && event.keyCode == 45 {
+            if event.modifierFlags.contains([.command, .option]) && event.keyCode == 45 {
                 DispatchQueue.main.async {
                     self?.showCapturePicker()
                 }
