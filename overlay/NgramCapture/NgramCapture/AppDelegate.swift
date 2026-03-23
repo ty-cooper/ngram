@@ -1,9 +1,10 @@
 import Cocoa
 import SwiftUI
+import Carbon.HIToolbox
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
-    private var hotKeyMonitor: Any?
+    private var hotKeyRef: EventHotKeyRef?
     private var capturePanel: NSPanel?
     private var sessionManager = CaptureSessionManager()
 
@@ -20,25 +21,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
 
-        // Global hotkey: Cmd+Shift+N
-        hotKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.modifierFlags.contains([.command, .option]) && event.keyCode == 45 { // N
-                DispatchQueue.main.async {
-                    self?.showCapturePicker()
-                }
+        // Register global hotkey: Cmd+Option+N via Carbon Events.
+        registerHotKey()
+    }
+
+    private func registerHotKey() {
+        var hotKeyID = EventHotKeyID()
+        hotKeyID.signature = OSType(0x4E475243) // "NGRC"
+        hotKeyID.id = 1
+
+        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+
+        let handler: EventHandlerUPP = { _, event, _ -> OSStatus in
+            DispatchQueue.main.async {
+                guard let delegate = NSApp.delegate as? AppDelegate else { return }
+                delegate.showCapturePicker()
             }
+            return noErr
         }
 
-        // Also monitor local events (when app is focused).
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.modifierFlags.contains([.command, .option]) && event.keyCode == 45 {
-                DispatchQueue.main.async {
-                    self?.showCapturePicker()
-                }
-                return nil
-            }
-            return event
-        }
+        InstallEventHandler(GetApplicationEventTarget(), handler, 1, &eventType, nil, nil)
+
+        // kVK_ANSI_N = 0x2D = 45, cmdKey = 256, optionKey = 2048
+        let modifiers: UInt32 = UInt32(cmdKey | optionKey)
+        RegisterEventHotKey(UInt32(kVK_ANSI_N), modifiers, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
     }
 
     @objc func showCapturePicker() {
