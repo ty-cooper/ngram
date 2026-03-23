@@ -1,0 +1,9 @@
+{
+  "id": "ngram-search",
+  "name": "Ngram Search",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Search vault via Meilisearch with ephemeral assembled results view",
+  "author": "Tyler Cooper",
+  "isDesktopOnly": true
+}

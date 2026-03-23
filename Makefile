@@ -2,7 +2,7 @@ BINARY = n
 BUILD_DIR = bin
 PLATFORMS = darwin/amd64 darwin/arm64 linux/amd64 linux/arm64
 
-.PHONY: build install test lint release clean overlay
+.PHONY: build install test lint release clean overlay obsidian
 
 build:
 	go build -o $(BUILD_DIR)/$(BINARY) ./cmd/n
@@ -33,6 +33,15 @@ release:
 		go build -o $(BUILD_DIR)/$(BINARY)-$${platform%/*}-$${platform#*/} ./cmd/n; \
 		echo "built $(BUILD_DIR)/$(BINARY)-$${platform%/*}-$${platform#*/}"; \
 	done
+
+obsidian:
+	cd obsidian-plugin && npm run build
+	@VAULT=$$(grep vault_path ~/.ngram.yml | awk '{print $$2}' | sed "s|~|$$HOME|"); \
+	PLUGIN_DIR="$$VAULT/.obsidian/plugins/ngram-search"; \
+	mkdir -p "$$PLUGIN_DIR"; \
+	cp obsidian-plugin/main.js "$$PLUGIN_DIR/main.js"; \
+	cp obsidian-plugin/manifest.json "$$PLUGIN_DIR/manifest.json"; \
+	echo "Installed to $$PLUGIN_DIR — reload Obsidian plugins"
 
 clean:
 	rm -rf $(BUILD_DIR)
