@@ -42,6 +42,7 @@ func init() {
 	rootCmd.AddCommand(completionCmd)
 	rootCmd.AddCommand(searchCmd)
 	rootCmd.AddCommand(reindexCmd)
+	rootCmd.AddCommand(initCmd)
 }
 
 func Execute() error {

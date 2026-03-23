@@ -54,10 +54,18 @@ func (c *Client) EnsureIndex() error {
 	filterAttrs := []interface{}{
 		"domain",
 		"content_type",
+		"topic_cluster",
 		"box",
 		"phase",
 		"tags",
 		"engagement",
+		"retention_state",
+		"retention_score",
+		"next_review",
+		"lapse_count",
+		"streak",
+		"created",
+		"modified",
 	}
 	task, err = c.index.UpdateFilterableAttributes(&filterAttrs)
 	if err != nil {
@@ -69,6 +77,11 @@ func (c *Client) EnsureIndex() error {
 
 	task, err = c.index.UpdateSortableAttributes(&[]string{
 		"captured",
+		"next_review",
+		"retention_score",
+		"lapse_count",
+		"created",
+		"modified",
 	})
 	if err != nil {
 		return fmt.Errorf("set sortable attributes: %w", err)
