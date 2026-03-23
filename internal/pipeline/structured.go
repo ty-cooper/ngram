@@ -153,7 +153,7 @@ func BuildFrontmatter(n *ProcessedNote) string {
 	return b.String()
 }
 
-// BuildNoteContent returns the complete markdown: frontmatter + summary + body.
+// BuildNoteContent returns the complete markdown: frontmatter + body + properties below page break.
 func BuildNoteContent(n *ProcessedNote) string {
 	var b strings.Builder
 	b.WriteString(BuildFrontmatter(n))
@@ -163,5 +163,27 @@ func BuildNoteContent(n *ProcessedNote) string {
 	}
 	b.WriteString(n.Body)
 	b.WriteString("\n")
+
+	// Readable properties below page break.
+	b.WriteString("\n---\n\n")
+	if n.Domain != "" {
+		fmt.Fprintf(&b, "**Domain:** %s", n.Domain)
+		if n.TopicCluster != "" {
+			fmt.Fprintf(&b, " / %s", n.TopicCluster)
+		}
+		b.WriteString("\n")
+	}
+	if len(n.Tags) > 0 {
+		fmt.Fprintf(&b, "**Tags:** %s\n", strings.Join(n.Tags, ", "))
+	}
+	fmt.Fprintf(&b, "**Type:** %s\n", n.ContentType)
+	if n.Box != "" {
+		fmt.Fprintf(&b, "**Box:** %s", n.Box)
+		if n.Phase != "" {
+			fmt.Fprintf(&b, " / %s", n.Phase)
+		}
+		b.WriteString("\n")
+	}
+
 	return b.String()
 }
