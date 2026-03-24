@@ -4,30 +4,92 @@ A personal knowledge engine. Capture raw notes from any context. Get back search
 
 Single Go binary. Meilisearch for search. Claude Code CLI for AI structuring. Obsidian vault as the storage layer.
 
+## Prerequisites
+
+- **Go** 1.22+
+- **Docker** (for Meilisearch)
+- **Anthropic API key** (`ANTHROPIC_API_KEY` env var)
+- **Obsidian** (vault viewer)
+- **macOS** (for iMessage quizzes and capture overlay)
+
 ## Install
 
 ```bash
+# CLI
 go install github.com/ty-cooper/ngram/cmd/n@latest
+
+# Or build from source
+git clone https://github.com/ty-cooper/ngram.git
+cd ngram
+make build          # builds bin/n
+make install        # installs to $GOPATH/bin/n
 ```
 
 ## Setup
 
 ```bash
-# Create config
+# 1. Set your Anthropic API key
+export ANTHROPIC_API_KEY="sk-ant-..."  # add to your shell profile
+
+# 2. Create config
 cat > ~/.ngram.yml << 'EOF'
-vault_path: ~/vault
+vault_path: ~/path/to/your/vault
 model: cloud
+imessage:
+  phone: "+1XXXXXXXXXX"
+schedule:
+  wake_hour: 8
+  sleep_hour: 22
 EOF
 
-# Initialize vault
+# 3. Initialize vault structure
 n init
 
-# Start services (Meilisearch + processor daemon)
+# 4. Start services (Meilisearch + processor daemon)
 n up
 
-# Install as system service (survives reboot)
+# 5. Verify everything is running
+n status
+
+# 6. Install as system service (survives reboot)
 n up --install
 ```
+
+Open the vault path in Obsidian as a vault.
+
+## Capture Overlay (macOS)
+
+NgramCapture is a SwiftUI menu bar app for global capture via **Cmd+Option+N**.
+
+```bash
+make overlay                    # builds bin/NgramCapture.app
+open bin/NgramCapture.app       # launch — appears in menu bar
+```
+
+Grant these macOS permissions (System Settings → Privacy & Security):
+- **Accessibility** → add NgramCapture.app
+- **Screen Recording** → add NgramCapture.app
+
+Add to Login Items to start on boot.
+
+After a rebuild (`make overlay`), you need to re-grant permissions since the code signature changes.
+
+## Obsidian Plugin
+
+The ngram-search plugin adds Meilisearch-powered search to Obsidian.
+
+```bash
+cd obsidian-plugin && npm install    # first time only
+make obsidian                        # builds and installs to vault
+```
+
+In Obsidian: Settings → Community Plugins → turn off Restricted Mode → enable **Ngram Search**. Open via Command Palette (Cmd+P) → "Ngram Search: Search vault".
+
+## iMessage Quizzes
+
+Requires macOS with Full Disk Access for the terminal or `n` binary (reads `~/Library/Messages/chat.db`).
+
+System Settings → Privacy & Security → Full Disk Access → add your terminal app (Terminal.app, iTerm2, Alacritty, etc.).
 
 ## Capture
 
@@ -146,25 +208,30 @@ When quizzes arrive on your phone, reply with:
 ## Architecture
 
 ```
-n <text> → _inbox/ → processor → knowledge/{domain}/{cluster}/
-                         ↓
-                   Claude Code CLI
-                   (structure, tag, classify)
-                         ↓
-                   Meilisearch index
-                         ↓
-                   git auto-commit
+n <text> / NgramCapture overlay / iMessage
+                    ↓
+               _inbox/*.md
+                    ↓
+         processor goroutine (fsnotify)
+                    ↓
+          Anthropic API (structure, tag, classify)
+                    ↓
+           notes/{id}-{slug}.md (Zettelkasten flat)
+                    ↓
+         Meilisearch index + git auto-commit
 ```
 
 Two repos: `ngram` (tool source) and vault (private data, connected via `~/.ngram.yml`).
 
 ## Tech Stack
 
-- **Go** single binary, all code
+- **Go** single binary, all backend code
 - **Cobra + Viper** CLI and config
-- **Bubbletea + Lipgloss** terminal UI
-- **Meilisearch** (Docker) hybrid search
-- **Claude Code CLI** (`claude -p`) for all AI operations
+- **Bubbletea + Lipgloss** terminal UI (quiz TUI)
+- **Meilisearch** (Docker) hybrid search with embeddings
+- **Anthropic API** (`claude-sonnet-4-20250514`) for AI structuring with JSON prefill
+- **SwiftUI** capture overlay (macOS menu bar app)
+- **TypeScript** Obsidian search plugin
 - **fsnotify** file watching with 500ms debounce
 - **go-sqlite3** iMessage chat.db polling
 - **Git** auto-commit on every vault change
