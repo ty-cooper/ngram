@@ -109,8 +109,9 @@ struct CaptureSessionView: View {
                     }
                     let count = manager.items.count
                     manager.finish()
-                    onDismiss()
-                    sendNotification(title: "Ngram", body: "\(count) items captured")
+                    sendNotification(title: "Ngram", body: "Captured \(count) item\(count == 1 ? "" : "s")")
+                    // Start a fresh session — don't close the panel.
+                    manager.startSession()
                 }
                 .keyboardShortcut(.return, modifiers: .command)
                 .buttonStyle(.borderedProminent)
