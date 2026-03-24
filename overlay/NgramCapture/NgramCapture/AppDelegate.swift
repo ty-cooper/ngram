@@ -3,12 +3,25 @@ import SwiftUI
 import HotKey
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    private var statusItem: NSStatusItem!
     private var hotKey: HotKey?
     private var capturePanel: NSPanel?
     private var sessionManager = CaptureSessionManager()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Global hotkey: Cmd+Option+N via soffes/HotKey.
+        // Menu bar icon.
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if let button = statusItem.button {
+            button.image = NSImage(systemSymbolName: "brain.head.profile", accessibilityDescription: "Ngram")
+        }
+
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Capture (⌘⌥N)", action: #selector(showCapturePicker), keyEquivalent: ""))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
+        statusItem.menu = menu
+
+        // Global hotkey: Cmd+Option+N.
         hotKey = HotKey(key: .n, modifiers: [.command, .option])
         hotKey?.keyDownHandler = { [weak self] in
             self?.showCapturePicker()
@@ -21,10 +34,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func showCapturePicker() {
         if capturePanel != nil {
-            capturePanel?.close()
+            capturePanel?.orderOut(nil)
             capturePanel = nil
         }
         startSession()
+    }
+
+    @objc func quitApp() {
+        NSApp.terminate(nil)
     }
 
     func startSession() {
@@ -41,12 +58,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        panel.title = "Ngram Capture Session"
+        panel.title = "Ngram Capture"
         panel.level = .floating
         panel.isFloatingPanel = true
         panel.contentView = NSHostingView(rootView: sessionView)
 
-        // Position top-right.
         if let screen = NSScreen.main {
             let x = screen.visibleFrame.maxX - 520
             let y = screen.visibleFrame.maxY - 470
