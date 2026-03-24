@@ -107,9 +107,7 @@ struct CaptureSessionView: View {
                         manager.addText(pending)
                         textInput = ""
                     }
-                    let count = manager.items.count
                     manager.finish()
-                    sendNotification(title: "Ngram", body: "Captured \(count) item\(count == 1 ? "" : "s")")
                     // Start a fresh session — don't close the panel.
                     manager.startSession()
                 }
