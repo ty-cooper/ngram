@@ -16,30 +16,26 @@ class CaptureSessionManager: ObservableObject {
     @Published var items: [CaptureItem] = []
     @Published var isActive = false
 
-    private var sessionDir: String = ""
     private var screenshotCount = 0
+    private var screenshotFiles: [String] = [] // full paths to temp screenshots
 
     func startSession() {
-        let ts = Int(Date().timeIntervalSince1970)
-        let vaultPath = VaultConfig.vaultPath()
-        sessionDir = "\(vaultPath)/_inbox/\(ts)-capture-session"
-        try? FileManager.default.createDirectory(atPath: sessionDir, withIntermediateDirectories: true)
         items = []
         screenshotCount = 0
+        screenshotFiles = []
         isActive = true
     }
 
     func captureScreenshot(completion: @escaping () -> Void) {
         screenshotCount += 1
         let filename = String(format: "ss-%03d.png", screenshotCount)
-        let filepath = "\(sessionDir)/\(filename)"
+        // Save to a temp location first.
+        let tempPath = NSTemporaryDirectory() + filename
 
-        // Run screencapture synchronously on a background thread
-        // so the UI doesn't block but we can reliably check the result.
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-            task.arguments = ["-i", "-x", filepath] // -x = no sound
+            task.arguments = ["-i", "-x", tempPath]
             do {
                 try task.run()
                 task.waitUntilExit()
@@ -49,14 +45,14 @@ class CaptureSessionManager: ObservableObject {
             }
 
             DispatchQueue.main.async {
-                if task.terminationStatus == 0 && FileManager.default.fileExists(atPath: filepath) {
-                    // Verify it's not a 0-byte file (cancelled capture).
-                    let attrs = try? FileManager.default.attributesOfItem(atPath: filepath)
+                if task.terminationStatus == 0 && FileManager.default.fileExists(atPath: tempPath) {
+                    let attrs = try? FileManager.default.attributesOfItem(atPath: tempPath)
                     let size = attrs?[.size] as? Int ?? 0
                     if size > 0 {
                         self?.items.append(CaptureItem(type: .screenshot, timestamp: Date(), content: filename))
+                        self?.screenshotFiles.append(tempPath)
                     } else {
-                        try? FileManager.default.removeItem(atPath: filepath)
+                        try? FileManager.default.removeItem(atPath: tempPath)
                     }
                 }
                 completion()
@@ -70,39 +66,59 @@ class CaptureSessionManager: ObservableObject {
     }
 
     func finish() {
-        guard isActive else { return }
+        guard isActive, !items.isEmpty else {
+            isActive = false
+            return
+        }
 
+        let vaultPath = VaultConfig.vaultPath()
+        let assetsDir = "\(vaultPath)/_assets"
+        try? FileManager.default.createDirectory(atPath: assetsDir, withIntermediateDirectories: true)
+
+        let ts = Int(Date().timeIntervalSince1970)
         let boxrc = VaultConfig.readBoxRC()
-        var manifest = "session_id: \"\(ISO8601DateFormatter().string(from: Date()))\"\n"
-        manifest += "capture_mode: \"mixed\"\n"
-        if !boxrc.box.isEmpty { manifest += "box: \"\(boxrc.box)\"\n" }
-        if !boxrc.phase.isEmpty { manifest += "phase: \"\(boxrc.phase)\"\n" }
-        manifest += "items:\n"
 
+        // Move screenshots to _assets/ with timestamped names.
+        for tempPath in screenshotFiles {
+            let filename = (tempPath as NSString).lastPathComponent
+            let destPath = "\(assetsDir)/\(ts)-\(filename)"
+            try? FileManager.default.moveItem(atPath: tempPath, toPath: destPath)
+        }
+
+        // Build a single .md file with text and embedded screenshots.
+        var body = ""
         for item in items {
-            let ts = ISO8601DateFormatter().string(from: item.timestamp)
             switch item.type {
-            case .screenshot:
-                manifest += "  - type: screenshot\n"
-                manifest += "    file: \(item.content)\n"
-                manifest += "    timestamp: \"\(ts)\"\n"
             case .text:
-                let escaped = item.content.replacingOccurrences(of: "\"", with: "\\\"")
-                manifest += "  - type: text\n"
-                manifest += "    content: \"\(escaped)\"\n"
-                manifest += "    timestamp: \"\(ts)\"\n"
+                body += item.content + "\n\n"
+            case .screenshot:
+                body += "![[\(ts)-\(item.content)]]\n\n"
             }
         }
 
-        try? manifest.write(toFile: "\(sessionDir)/manifest.yml", atomically: true, encoding: .utf8)
+        // Frontmatter.
+        var note = "---\n"
+        note += "captured: \"\(ISO8601DateFormatter().string(from: Date()))\"\n"
+        note += "source: \"capture-overlay\"\n"
+        if !boxrc.box.isEmpty { note += "box: \"\(boxrc.box)\"\n" }
+        if !boxrc.phase.isEmpty { note += "phase: \"\(boxrc.phase)\"\n" }
+        note += "---\n\n"
+        note += body.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
+
+        // Write to _inbox/ as a single .md file.
+        let inboxPath = "\(vaultPath)/_inbox/\(ts)-capture.md"
+        try? note.write(toFile: inboxPath, atomically: true, encoding: .utf8)
+
         isActive = false
     }
 
     func abort() {
-        if !sessionDir.isEmpty {
-            try? FileManager.default.removeItem(atPath: sessionDir)
+        // Clean up temp screenshots.
+        for tempPath in screenshotFiles {
+            try? FileManager.default.removeItem(atPath: tempPath)
         }
         items = []
+        screenshotFiles = []
         isActive = false
     }
 }
