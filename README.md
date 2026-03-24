@@ -150,6 +150,26 @@ n quiz --new           # unreviewed notes
 
 Quizzes also arrive via iMessage at random intervals throughout the day. Reply with your answer. Graded in 30 seconds.
 
+## Dream Cycle
+
+Nightly knowledge consolidation. Scans the vault for duplicates, junk notes, and near-synonym clusters. Creates a PR against the vault repo with proposed changes — each change is a separate commit so you can cherry-pick.
+
+```bash
+# Preview what would change
+n dream --dry-run
+
+# Run and create PR
+n dream
+```
+
+Passes:
+- **Dedup** — finds similar note pairs via Meilisearch, LLM decides merge or keep
+- **Quality** — archives notes under 20 chars (junk captures)
+- **Clusters** — detects near-synonyms (e.g. "Network Reconnaissance" vs "Network Scanning"), proposes taxonomy merges
+- **Nothing** — if the vault is clean, no PR is created
+
+Schedule nightly: add `n dream` to crontab or launchd at 3am.
+
 ## Commands
 
 ```
@@ -190,6 +210,8 @@ SYSTEM
   n status                     health check + processing backlog
   n up --install               install as system service
   n up --uninstall             remove system service
+  n dream                      nightly knowledge consolidation (creates PR)
+  n dream --dry-run            preview changes without modifying
   n migrate --source <dir>     batch import existing vault
   n report <box>               generate engagement report
 ```
