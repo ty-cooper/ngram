@@ -108,8 +108,8 @@ struct CaptureSessionView: View {
                         textInput = ""
                     }
                     manager.finish()
-                    // Start a fresh session — don't close the panel.
-                    manager.startSession()
+                    // Hide the panel but keep the app alive in menu bar.
+                    onDismiss()
                 }
                 .keyboardShortcut(.return, modifiers: .command)
                 .buttonStyle(.borderedProminent)

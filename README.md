@@ -83,7 +83,9 @@ cd obsidian-plugin && npm install    # first time only
 make obsidian                        # builds and installs to vault
 ```
 
-In Obsidian: Settings → Community Plugins → turn off Restricted Mode → enable **Ngram Search**. Open via Command Palette (Cmd+P) → "Ngram Search: Search vault".
+In Obsidian: Settings → Community Plugins → turn off Restricted Mode → enable **Ngram Search**.
+
+Open via **Cmd+Option+1** or Command Palette (Cmd+P) → "Ngram Search: Search vault". Results render as a single assembled document with all matching note bodies, code blocks, and clickable source links to jump to the original note.
 
 ## iMessage Quizzes
 
@@ -100,6 +102,9 @@ n found sqli on login param id
 # With explicit title
 n -t "nmap results" open ports on 445, 139, 80
 
+# Open $EDITOR (vim) to write a full note
+n new
+
 # Pipe command output
 nmap -sV 10.10.10.8 | n -t "nmap-optimum"
 
@@ -111,7 +116,7 @@ n box optimum 10.10.10.8 --os=windows
 n phase exploit
 ```
 
-Notes land in `_inbox/` and are automatically structured by the AI pipeline into the correct vault directory with tags, domain classification, and retention metadata.
+Notes land in `_inbox/` and are automatically structured by the AI pipeline into `knowledge/` with tags, domain classification, and retention metadata. Screenshots go to `_assets/`.
 
 ## Search
 
@@ -151,6 +156,7 @@ Quizzes also arrive via iMessage at random intervals throughout the day. Reply w
 CAPTURE
   n <text>                    instant note
   n -t "title" <text>         note with title
+  n new                       open $EDITOR to write a note
   n run <command>             execute + capture (via /bin/sh -c)
   command | n -t "title"      pipe to note
   n amend <text>              append to last captured note
