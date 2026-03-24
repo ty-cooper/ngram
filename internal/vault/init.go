@@ -15,7 +15,7 @@ var vaultDirs = []string{
 	"_meta",
 	"_config",
 	"_templates",
-	"notes",
+	"knowledge",
 	"boxes",
 }
 

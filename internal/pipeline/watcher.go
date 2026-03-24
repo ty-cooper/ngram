@@ -129,9 +129,22 @@ func (w *Watcher) debouncedWatch(ctx context.Context, watcher *fsnotify.Watcher)
 						continue
 					}
 
-					// For directories, only process if they're capture bundles.
-					if info != nil && info.IsDir() && !IsBundle(path) {
-						continue
+					// For directories, wait for manifest.yml (capture bundle).
+					if info != nil && info.IsDir() {
+						if !IsBundle(path) {
+							bundleReady := false
+							for i := 0; i < 10; i++ {
+								time.Sleep(500 * time.Millisecond)
+								if IsBundle(path) {
+									bundleReady = true
+									break
+								}
+							}
+							if !bundleReady {
+								log.Printf("warn: directory %s not a capture bundle, skipping", filepath.Base(path))
+								continue
+							}
+						}
 					}
 
 					go func(p string) {

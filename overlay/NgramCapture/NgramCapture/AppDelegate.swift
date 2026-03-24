@@ -9,18 +9,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var sessionManager = CaptureSessionManager()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Menu bar icon.
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "brain.head.profile", accessibilityDescription: "Ngram")
-        }
-
-        let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Capture (⌘⌥N)", action: #selector(showCapturePicker), keyEquivalent: ""))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        statusItem.menu = menu
-
         // Global hotkey: Cmd+Option+N via soffes/HotKey.
         hotKey = HotKey(key: .n, modifiers: [.command, .option])
         hotKey?.keyDownHandler = { [weak self] in

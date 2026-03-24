@@ -18,7 +18,7 @@ func TestProcess_MockModel(t *testing.T) {
 	// Create vault directories.
 	os.MkdirAll(filepath.Join(vaultDir, "_inbox"), 0o755)
 	os.MkdirAll(filepath.Join(vaultDir, "_meta"), 0o755)
-	os.MkdirAll(filepath.Join(vaultDir, "notes"), 0o755)
+	os.MkdirAll(filepath.Join(vaultDir, "knowledge"), 0o755)
 
 	// Create a taxonomy file.
 	os.WriteFile(filepath.Join(vaultDir, "_meta", "taxonomy.yml"), []byte(`
@@ -84,7 +84,7 @@ election timeout fires, it transitions to candidate state.
 
 	// Verify structured note exists in knowledge/.
 	found := false
-	filepath.Walk(filepath.Join(vaultDir, "notes"), func(path string, info os.FileInfo, err error) error {
+	filepath.Walk(filepath.Join(vaultDir, "knowledge"), func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -105,7 +105,7 @@ election timeout fires, it transitions to candidate state.
 		return nil
 	})
 	if !found {
-		t.Error("no structured note found in notes/")
+		t.Error("no structured note found in knowledge/")
 	}
 
 	// Verify API usage log.

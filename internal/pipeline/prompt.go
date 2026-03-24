@@ -85,9 +85,9 @@ func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string, vaultPath
 	return b.String()
 }
 
-// discoverTags scans notes/ for existing tags in frontmatter.
+// discoverTags scans knowledge/ for existing tags in frontmatter.
 func discoverTags(vaultPath string) []string {
-	notesDir := filepath.Join(vaultPath, "notes")
+	notesDir := filepath.Join(vaultPath, "knowledge")
 	entries, err := os.ReadDir(notesDir)
 	if err != nil {
 		return nil
