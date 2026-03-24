@@ -106,7 +106,20 @@ func (w *Watcher) debouncedWatch(ctx context.Context, watcher *fsnotify.Watcher)
 			if !ok {
 				return nil
 			}
+			// If a manifest.yml was written inside a subdirectory,
+			// treat the parent directory as the processable item.
+			if filepath.Base(event.Name) == "manifest.yml" {
+				parentDir := filepath.Dir(event.Name)
+				pending[parentDir] = time.Now()
+				continue
+			}
 			if !isProcessable(event) {
+				// If a new directory was created, watch it for manifest.yml.
+				if event.Op&fsnotify.Create != 0 {
+					if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+						watcher.Add(event.Name)
+					}
+				}
 				continue
 			}
 			pending[event.Name] = time.Now()
@@ -129,22 +142,9 @@ func (w *Watcher) debouncedWatch(ctx context.Context, watcher *fsnotify.Watcher)
 						continue
 					}
 
-					// For directories, wait for manifest.yml (capture bundle).
-					if info != nil && info.IsDir() {
-						if !IsBundle(path) {
-							bundleReady := false
-							for i := 0; i < 10; i++ {
-								time.Sleep(500 * time.Millisecond)
-								if IsBundle(path) {
-									bundleReady = true
-									break
-								}
-							}
-							if !bundleReady {
-								log.Printf("warn: directory %s not a capture bundle, skipping", filepath.Base(path))
-								continue
-							}
-						}
+					// For directories, only process if they're capture bundles.
+					if info != nil && info.IsDir() && !IsBundle(path) {
+						continue
 					}
 
 					go func(p string) {

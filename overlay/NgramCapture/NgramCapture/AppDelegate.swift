@@ -3,7 +3,6 @@ import SwiftUI
 import HotKey
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    private var statusItem: NSStatusItem!
     private var hotKey: HotKey?
     private var capturePanel: NSPanel?
     private var sessionManager = CaptureSessionManager()
@@ -30,7 +29,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func startSession() {
         let sessionView = CaptureSessionView(manager: sessionManager) { [weak self] in
-            self?.capturePanel?.close()
+            self?.capturePanel?.orderOut(nil)
             self?.capturePanel = nil
         }
 

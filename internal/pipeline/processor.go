@@ -390,6 +390,13 @@ func (p *Processor) writeRawDirect(rawContent string, processingPath string) err
 }
 
 func (p *Processor) gitCommit(relPath, noteID, source string) {
+	// Skip if vault is not a git repo.
+	check := exec.Command("git", "rev-parse", "--git-dir")
+	check.Dir = p.VaultPath
+	if err := check.Run(); err != nil {
+		return
+	}
+
 	msg := fmt.Sprintf("ngram: structured %s from %s", noteID, source)
 
 	add := exec.Command("git", "add", relPath)
