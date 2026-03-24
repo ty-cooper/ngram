@@ -31,11 +31,7 @@ export class MeilisearchClient {
         "file_path",
         "content_type",
       ],
-      attributesToHighlight: ["title", "body"],
-      highlightPreTag: "<mark>",
-      highlightPostTag: "</mark>",
-      attributesToCrop: ["body"],
-      cropLength: 200,
+      showRankingScore: true,
     });
 
     return results.hits.map((hit: any) => ({

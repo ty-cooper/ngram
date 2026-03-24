@@ -76,50 +76,28 @@ export class SearchView extends ItemView {
         overflow-y: auto;
         padding: 0 16px 16px;
       }
-      .ngram-result {
-        margin: 16px 0;
-        padding: 16px;
-        background: var(--background-secondary);
-        border-radius: 8px;
-        border: 1px solid var(--background-modifier-border);
-      }
-      .ngram-result-title {
-        font-size: 18px;
-        font-weight: 600;
-        cursor: pointer;
-        color: var(--text-accent);
-        margin-bottom: 4px;
-      }
-      .ngram-result-title:hover {
-        text-decoration: underline;
-      }
-      .ngram-result-summary {
-        color: var(--text-muted);
-        font-style: italic;
-        margin-bottom: 8px;
-        font-size: 13px;
-      }
-      .ngram-result-body {
-        margin-bottom: 8px;
+      .ngram-assembled-doc {
+        padding: 16px 0;
         font-size: 14px;
         line-height: 1.6;
       }
-      .ngram-result-tags {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
+      .ngram-source-link {
+        margin: 4px 0 8px;
       }
-      .ngram-tag {
-        background: var(--interactive-accent);
-        color: var(--text-on-accent);
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 11px;
-      }
-      .ngram-result-type {
-        font-size: 11px;
+      .ngram-source-link a {
         color: var(--text-faint);
-        float: right;
+        font-size: 11px;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .ngram-source-link a:hover {
+        color: var(--text-accent);
+        text-decoration: underline;
+      }
+      .ngram-assembled-doc hr {
+        border: none;
+        border-top: 1px solid var(--background-modifier-border);
+        margin: 16px 0;
       }
       .ngram-empty {
         text-align: center;
@@ -164,7 +142,7 @@ export class SearchView extends ItemView {
     }
   }
 
-  private renderResults(results: NoteResult[], query: string): void {
+  private async renderResults(results: NoteResult[], query: string): Promise<void> {
     this.resultsEl.empty();
 
     if (results.length === 0) {
@@ -175,39 +153,30 @@ export class SearchView extends ItemView {
       return;
     }
 
-    this.resultsEl.createDiv({
-      cls: "ngram-result-count",
-      text: `${results.length} note${results.length === 1 ? "" : "s"} found`,
+    const docEl = this.resultsEl.createDiv({
+      cls: "ngram-assembled-doc markdown-rendered markdown-preview-view",
     });
 
+    // Render count.
+    const countEl = docEl.createEl("em", { text: `${results.length} notes matched` });
+    countEl.style.color = "var(--text-muted)";
+    countEl.style.fontSize = "12px";
+    docEl.createEl("hr");
+
     for (const note of results) {
-      const card = this.resultsEl.createDiv({ cls: "ngram-result" });
+      // Render note body as markdown.
+      const bodyEl = docEl.createDiv();
+      await MarkdownRenderer.render(this.app, note.body, bodyEl, note.file_path, this);
 
-      // Type badge.
-      card.createSpan({ cls: "ngram-result-type", text: note.content_type });
-
-      // Clickable title.
-      const title = card.createDiv({ cls: "ngram-result-title", text: note.title });
-      title.addEventListener("click", () => {
+      // Source link — plain DOM, not markdown.
+      const sourceEl = docEl.createEl("div", { cls: "ngram-source-link" });
+      const link = sourceEl.createEl("a", { text: `↗ ${note.title}` });
+      link.addEventListener("click", (e: MouseEvent) => {
+        e.preventDefault();
         this.app.workspace.openLinkText(note.file_path, "", false);
       });
 
-      // Summary.
-      if (note.summary) {
-        card.createDiv({ cls: "ngram-result-summary", text: note.summary });
-      }
-
-      // Body rendered as markdown.
-      const bodyEl = card.createDiv({ cls: "ngram-result-body" });
-      MarkdownRenderer.render(this.app, note.body, bodyEl, note.file_path, this);
-
-      // Tags.
-      if (note.tags && note.tags.length > 0) {
-        const tagsEl = card.createDiv({ cls: "ngram-result-tags" });
-        for (const tag of note.tags) {
-          tagsEl.createSpan({ cls: "ngram-tag", text: `#${tag}` });
-        }
-      }
+      docEl.createEl("hr");
     }
   }
 

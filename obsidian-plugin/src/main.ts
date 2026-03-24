@@ -25,7 +25,7 @@ export default class NgramSearchPlugin extends Plugin {
     this.addCommand({
       id: "open-search",
       name: "Search vault",
-      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "f" }],
+      hotkeys: [{ modifiers: ["Mod", "Alt"], key: "1" }],
       callback: () => this.activateView(),
     });
 
