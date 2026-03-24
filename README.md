@@ -168,7 +168,20 @@ Passes:
 - **Clusters** — detects near-synonyms (e.g. "Network Reconnaissance" vs "Network Scanning"), proposes taxonomy merges
 - **Nothing** — if the vault is clean, no PR is created
 
-Schedule nightly: add `n dream` to crontab or launchd at 3am.
+Schedule nightly:
+
+```bash
+# crontab (run at 3am daily)
+crontab -e
+# add: 0 3 * * * /path/to/n dream >> /tmp/ngram-dream.log 2>&1
+
+# or via n up --install (launchd on macOS)
+# the daemon scheduler runs n dream automatically at 3am if configured:
+# add to ~/.ngram.yml:
+#   dream:
+#     enabled: true
+#     hour: 3
+```
 
 ## Commands
 
