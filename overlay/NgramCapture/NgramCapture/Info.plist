@@ -4,5 +4,11 @@
 <dict>
     <key>LSUIElement</key>
     <true/>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.ngram.capture</string>
+    <key>CFBundleName</key>
+    <string>Ngram</string>
 </dict>
 </plist>

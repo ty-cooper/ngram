@@ -12,9 +12,10 @@ install:
 
 overlay:
 	cd overlay/NgramCapture && swift build -c release
-	@mkdir -p $(BUILD_DIR)/NgramCapture.app/Contents/MacOS
+	@mkdir -p $(BUILD_DIR)/NgramCapture.app/Contents/MacOS $(BUILD_DIR)/NgramCapture.app/Contents/Resources
 	cp overlay/NgramCapture/.build/release/NgramCapture $(BUILD_DIR)/NgramCapture.app/Contents/MacOS/NgramCapture
 	cp overlay/NgramCapture/NgramCapture/Info.plist $(BUILD_DIR)/NgramCapture.app/Contents/Info.plist
+	cp overlay/NgramCapture/NgramCapture/AppIcon.icns $(BUILD_DIR)/NgramCapture.app/Contents/Resources/AppIcon.icns
 	codesign --force --deep --sign - $(BUILD_DIR)/NgramCapture.app
 	xattr -r -d com.apple.quarantine $(BUILD_DIR)/NgramCapture.app 2>/dev/null || true
 	@echo "Built $(BUILD_DIR)/NgramCapture.app"
