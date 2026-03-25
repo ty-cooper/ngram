@@ -70,7 +70,13 @@ Searchable attributes are weighted: title > summary > tags > body.
 
 ### Hybrid Search
 
-Meilisearch combines keyword matching and semantic similarity in one request. Configure `semanticRatio` (0.0 = pure keyword, 1.0 = pure semantic, 0.5 = balanced). The embedder is configured to match the `MODEL` flag: local Ollama for `MODEL=local`, OpenAI for `MODEL=cloud`.
+Meilisearch combines keyword matching and semantic similarity in one request. `FindSimilar()` uses `semanticRatio: 0.7` (70% semantic, 30% keyword) when embeddings are configured. This allows conceptually similar notes (e.g. "nmap -sV" and "nmap -sS") to match even when they share few keywords.
+
+Embedder configuration is automatic during `n up` and `n dream`:
+- `model: cloud` — OpenAI `text-embedding-3-small`, requires `OPENAI_API_KEY` env var or `embeddings.openai_api_key` in `~/.ngram.yml`
+- `model: off` / no API key — falls back to keyword-only search (no embeddings)
+
+The document template sent to the embedder: `"A {{doc.content_type}} note titled {{doc.title}}. Tags: {{doc.tags}}. {{doc.summary}} {{doc.body}}"` (max 2000 bytes).
 
 This eliminates the need for a custom embedding store, cosine similarity code, or separate vector DB.
 

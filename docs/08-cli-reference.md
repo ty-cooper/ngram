@@ -17,9 +17,11 @@ schedule:
   sleep_hour: 22
 api:
   daily_budget_usd: 5.00
+embeddings:
+  openai_api_key: "sk-..."        # or set OPENAI_API_KEY env var
 ```
 
-API keys are env vars only: `ANTHROPIC_API_KEY`. Never in config files.
+API keys: `ANTHROPIC_API_KEY` for LLM calls, `OPENAI_API_KEY` for embeddings. Env vars or config file.
 
 ## Context Engine: `.boxrc`
 
@@ -123,7 +125,8 @@ vault/
 │   ├── heartbeat.json            process health
 │   ├── retention-snapshot.json   daily retention stats
 │   ├── stats-cache.json          precomputed stats for n stats
-│   └── dedup-log.jsonl           dedup decisions
+│   ├── dedup-log.jsonl           dedup decisions
+│   └── dream-state.json         per-note dream review timestamps
 ├── knowledge/                    domain-agnostic knowledge base
 │   └── {domain}/{cluster}/
 ├── boxes/                        engagement targets

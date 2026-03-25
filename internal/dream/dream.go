@@ -45,13 +45,21 @@ type Runner struct {
 func (r *Runner) Run(ctx context.Context) (*Report, error) {
 	report := &Report{Date: time.Now().Format("2006-01-02")}
 
-	// 1. Load all notes from knowledge/.
-	notes, err := r.loadNotes()
+	// 1. Load all notes and filter by dream state.
+	allNotes, err := r.loadNotes()
 	if err != nil {
 		return nil, fmt.Errorf("load notes: %w", err)
 	}
+
+	state := loadState(r.VaultPath)
+	var notes []noteEntry
+	for _, n := range allNotes {
+		if state.needsReview(n.ID, n.Modified) {
+			notes = append(notes, n)
+		}
+	}
 	report.Reviewed = len(notes)
-	log.Printf("dream: loaded %d notes", len(notes))
+	log.Printf("dream: loaded %d notes, %d need review", len(allNotes), len(notes))
 
 	if len(notes) == 0 {
 		return report, nil
@@ -102,17 +110,27 @@ func (r *Runner) Run(ctx context.Context) (*Report, error) {
 		report.NoAction = 0
 	}
 
+	// Stamp all reviewed notes so they're skipped until modified.
+	now := time.Now().UTC()
+	for _, n := range notes {
+		state[n.ID] = now
+	}
+	if err := saveState(r.VaultPath, state); err != nil {
+		log.Printf("dream: save state failed: %v", err)
+	}
+
 	return report, nil
 }
 
 type noteEntry struct {
-	ID    string
-	Path  string
-	Title string
-	Body  string
-	Tags  []string
-	Domain string
-	Cluster string
+	ID       string
+	Path     string
+	Title    string
+	Body     string
+	Tags     []string
+	Domain   string
+	Cluster  string
+	Modified time.Time
 }
 
 func (r *Runner) loadNotes() ([]noteEntry, error) {
@@ -146,6 +164,11 @@ func (r *Runner) loadNotes() ([]noteEntry, error) {
 						entry.Domain = strings.Trim(strings.TrimPrefix(line, "domain: "), "\"")
 					} else if strings.HasPrefix(line, "topic_cluster: ") {
 						entry.Cluster = strings.Trim(strings.TrimPrefix(line, "topic_cluster: "), "\"")
+					} else if strings.HasPrefix(line, "modified: ") {
+						val := strings.Trim(strings.TrimPrefix(line, "modified: "), "\"")
+						if t, err := time.Parse(time.RFC3339, val); err == nil {
+							entry.Modified = t
+						}
 					}
 				}
 			}

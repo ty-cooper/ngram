@@ -59,7 +59,7 @@ No separate OCR library. Claude vision handles all screenshot text extraction.
 
 ## Dedup Agent
 
-When Meilisearch returns similar existing notes (>= 0.85), the dedup agent receives the new note AND the top 5 matches. It decides:
+When Meilisearch returns similar existing notes (>= 0.75 via hybrid semantic + keyword search), the dedup agent receives the new note AND the top 5 matches. It decides:
 
 **APPEND**: New content belongs in an existing note. Body extended, tags merged, modified timestamp updated, git commit. Retention state preserved (appending doesn't reset quiz schedule).
 
@@ -70,10 +70,10 @@ When Meilisearch returns similar existing notes (>= 0.85), the dedup agent recei
 Decision matrix:
 
 ```
-Similarity >= 0.95 AND same domain/context → DUPLICATE
-Similarity >= 0.85 AND related content     → APPEND to existing note
-Similarity >= 0.85 AND different angle     → NEW (keep both, add links)
-Similarity < 0.85                          → NEW (no dedup concern)
+Similarity >= 0.90 AND same domain/context → DUPLICATE
+Similarity >= 0.75 AND related content     → APPEND to existing note
+Similarity >= 0.75 AND different angle     → NEW (keep both, add links)
+Similarity < 0.75                          → NEW (no dedup concern)
 ```
 
 API cost per dedup decision: 0 embedding calls (Meilisearch handles this), 1 master agent call, 0-3 subagent calls if NEW with multiple concepts. Default to NEW on any error (never lose a note).

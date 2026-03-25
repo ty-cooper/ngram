@@ -152,7 +152,7 @@ Quizzes also arrive via iMessage at random intervals throughout the day. Reply w
 
 ## Dream Cycle
 
-Nightly knowledge consolidation. Scans the vault for duplicates, junk notes, and near-synonym clusters. Creates a PR against the vault repo with proposed changes — each change is a separate commit so you can cherry-pick.
+Nightly knowledge consolidation. Scans the vault for duplicates, junk notes, and near-synonym clusters. Creates a PR against the vault repo with proposed changes — each change is a separate commit so you can cherry-pick or revert individually.
 
 ```bash
 # Preview what would change
@@ -163,10 +163,12 @@ n dream
 ```
 
 Passes:
-- **Dedup** — finds similar note pairs via Meilisearch, LLM decides merge or keep
+- **Dedup** — finds similar note pairs via hybrid search (semantic + keyword), LLM decides merge or keep
 - **Quality** — archives notes under 20 chars (junk captures)
-- **Clusters** — detects near-synonyms (e.g. "Network Reconnaissance" vs "Network Scanning"), proposes taxonomy merges
+- **Clusters** — detects near-synonyms (e.g. "Network Reconnaissance" vs "Network Scanning"), proposes taxonomy merges constrained to `_meta/topic-clusters.yml`
 - **Nothing** — if the vault is clean, no PR is created
+
+State tracking: dream records which notes it reviewed in `_meta/dream-state.json`. Notes are skipped on subsequent runs until their `modified` timestamp changes. If you reject a proposed change (revert the commit before merging the PR), those notes won't be re-proposed until you edit them.
 
 Schedule nightly:
 
