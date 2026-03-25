@@ -246,6 +246,7 @@ or
 		return Action{Type: "nothing"}, err
 	}
 
+	out = stripCodeFences(out)
 	var action Action
 	if err := json.Unmarshal(out, &action); err != nil {
 		return Action{Type: "nothing"}, fmt.Errorf("parse merge decision: %w", err)
@@ -300,11 +301,26 @@ Return a JSON array. If no merges needed, return [].
 		return nil, err
 	}
 
+	out = stripCodeFences(out)
 	var actions []Action
 	if err := json.Unmarshal(out, &actions); err != nil {
 		return nil, fmt.Errorf("parse cluster sweep: %w", err)
 	}
 	return actions, nil
+}
+
+func stripCodeFences(data []byte) []byte {
+	s := strings.TrimSpace(string(data))
+	if strings.HasPrefix(s, "```") {
+		if idx := strings.Index(s, "\n"); idx >= 0 {
+			s = s[idx+1:]
+		}
+		if strings.HasSuffix(s, "```") {
+			s = s[:len(s)-3]
+		}
+		s = strings.TrimSpace(s)
+	}
+	return []byte(s)
 }
 
 func min(a, b int) int {

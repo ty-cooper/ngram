@@ -18,9 +18,12 @@ func (r *Runner) Apply(report *Report) error {
 
 	branch := fmt.Sprintf("dream/%s", time.Now().Format("2006-01-02"))
 
-	// Create branch in the vault repo.
+	// Create or switch to branch in the vault repo.
 	if err := r.git("checkout", "-b", branch); err != nil {
-		return fmt.Errorf("create branch: %w", err)
+		// Branch may already exist from a prior partial run.
+		if err := r.git("checkout", branch); err != nil {
+			return fmt.Errorf("checkout branch: %w", err)
+		}
 	}
 
 	// Apply merges.
@@ -53,9 +56,16 @@ func (r *Runner) Apply(report *Report) error {
 		r.git("commit", "-m", fmt.Sprintf("dream: recluster → %s — %s", rc.NewCluster, rc.Reason))
 	}
 
+	// Check if there are any commits on this branch beyond main.
+	if !r.hasBranchCommits(branch) {
+		log.Println("dream: no changes to commit, cleaning up branch")
+		r.git("checkout", "main")
+		r.git("branch", "-D", branch)
+		return nil
+	}
+
 	// Push and create PR.
 	if err := r.git("push", "-u", "origin", branch); err != nil {
-		// If push fails (no remote), just leave the branch.
 		log.Printf("dream: push failed (no remote?): %v", err)
 		r.git("checkout", "main")
 		return nil
@@ -168,6 +178,16 @@ func (r *Runner) findNoteByID(id string) string {
 	return found
 }
 
+func (r *Runner) hasBranchCommits(branch string) bool {
+	cmd := exec.Command("git", "log", "main.."+branch, "--oneline")
+	cmd.Dir = r.VaultPath
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return len(strings.TrimSpace(string(out))) > 0
+}
+
 func (r *Runner) git(args ...string) error {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = r.VaultPath
@@ -207,7 +227,22 @@ func (r *Runner) createPR(report *Report, branch string) {
 
 	title := fmt.Sprintf("dream: nightly consolidation %s", report.Date)
 
-	cmd := exec.Command("gh", "pr", "create", "--title", title, "--body", body, "--base", "main", "--head", branch)
+	ghBin, err := exec.LookPath("gh")
+	if err != nil {
+		// Homebrew on macOS may not be in PATH for non-login shells.
+		for _, candidate := range []string{"/opt/homebrew/bin/gh", "/usr/local/bin/gh"} {
+			if _, serr := os.Stat(candidate); serr == nil {
+				ghBin = candidate
+				break
+			}
+		}
+		if ghBin == "" {
+			log.Printf("dream: gh not found in PATH, skipping PR creation")
+			return
+		}
+	}
+
+	cmd := exec.Command(ghBin, "pr", "create", "--title", title, "--body", body, "--base", "main", "--head", branch)
 	cmd.Dir = r.VaultPath
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
