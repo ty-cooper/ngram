@@ -20,7 +20,7 @@ var (
 	ErrAuthExpired = errors.New("anthropic API key missing or invalid")
 )
 
-const defaultModel = "claude-sonnet-4-6-20250514"
+const defaultModel = "claude-sonnet-4-6"
 
 // Runner wraps Anthropic API calls via instructor-go for type-safe structured output
 // and raw client for free-text responses.
