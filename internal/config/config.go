@@ -13,6 +13,11 @@ type Config struct {
 	Model       string            `mapstructure:"model"`
 	Meilisearch MeilisearchConfig `mapstructure:"meilisearch"`
 	API         APIConfig         `mapstructure:"api"`
+	Embeddings  EmbeddingsConfig  `mapstructure:"embeddings"`
+}
+
+type EmbeddingsConfig struct {
+	OpenAIAPIKey string `mapstructure:"openai_api_key"`
 }
 
 type APIConfig struct {
@@ -43,6 +48,7 @@ func Load() (*Config, error) {
 
 	viper.SetEnvPrefix("NGRAM")
 	viper.BindEnv("vault_path")
+	viper.BindEnv("embeddings.openai_api_key", "OPENAI_API_KEY", "NGRAM_EMBEDDINGS_OPENAI_API_KEY")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {

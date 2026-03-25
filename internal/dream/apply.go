@@ -16,14 +16,14 @@ func (r *Runner) Apply(report *Report) error {
 		return nil
 	}
 
-	branch := fmt.Sprintf("dream/%s", time.Now().Format("2006-01-02"))
+	// Stash any dirty working tree state (e.g. Obsidian workspace changes).
+	r.git("add", "-A")
+	r.git("commit", "-m", "existing changes")
 
-	// Create or switch to branch in the vault repo.
+	branch := r.nextBranch()
+
 	if err := r.git("checkout", "-b", branch); err != nil {
-		// Branch may already exist from a prior partial run.
-		if err := r.git("checkout", branch); err != nil {
-			return fmt.Errorf("checkout branch: %w", err)
-		}
+		return fmt.Errorf("create branch %s: %w", branch, err)
 	}
 
 	// Apply merges.
@@ -135,7 +135,10 @@ func (r *Runner) applyArchive(archive Action) error {
 }
 
 func (r *Runner) applyRecluster(rc Action) error {
-	// Walk all notes, find ones in the old cluster, update frontmatter.
+	if len(rc.OldClusters) == 0 || rc.NewCluster == "" {
+		return fmt.Errorf("recluster missing old_clusters or new_cluster")
+	}
+
 	knowledgeDir := filepath.Join(r.VaultPath, "knowledge")
 	return filepath.Walk(knowledgeDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".md") {
@@ -146,16 +149,23 @@ func (r *Runner) applyRecluster(rc Action) error {
 			return nil
 		}
 		content := string(data)
-		// Check if this note matches the old cluster in the reason field.
-		if rc.NewCluster != "" && strings.Contains(content, "topic_cluster:") {
-			// Simple string replacement for near-synonym clusters.
-			for _, oldCluster := range strings.Split(rc.Reason, " → ") {
-				oldCluster = strings.TrimSpace(oldCluster)
-				if oldCluster != "" && oldCluster != rc.NewCluster {
-					content = strings.Replace(content, "topic_cluster: \""+oldCluster+"\"", "topic_cluster: \""+rc.NewCluster+"\"", 1)
-					content = strings.Replace(content, "topic_cluster: "+oldCluster, "topic_cluster: "+rc.NewCluster, 1)
+		changed := false
+		for _, old := range rc.OldClusters {
+			if old == rc.NewCluster {
+				continue
+			}
+			for _, pattern := range []string{
+				"topic_cluster: \"" + old + "\"",
+				"topic_cluster: " + old,
+			} {
+				if strings.Contains(content, pattern) {
+					replacement := "topic_cluster: \"" + rc.NewCluster + "\""
+					content = strings.Replace(content, pattern, replacement, 1)
+					changed = true
 				}
 			}
+		}
+		if changed {
 			os.WriteFile(path, []byte(content), 0o644)
 		}
 		return nil
@@ -176,6 +186,34 @@ func (r *Runner) findNoteByID(id string) string {
 		return nil
 	})
 	return found
+}
+
+func (r *Runner) nextBranch() string {
+	date := time.Now().Format("2006-01-02")
+	base := "dream/" + date
+
+	// List existing branches matching this date.
+	cmd := exec.Command("git", "branch", "-a", "--list", base+"*")
+	cmd.Dir = r.VaultPath
+	out, _ := cmd.Output()
+
+	if len(strings.TrimSpace(string(out))) == 0 {
+		return base
+	}
+
+	// Count existing branches for this date and increment.
+	n := 0
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		line = strings.TrimPrefix(line, "remotes/origin/")
+		if line == base || strings.HasPrefix(line, base+"-") {
+			n++
+		}
+	}
+	if n == 0 {
+		return base
+	}
+	return fmt.Sprintf("%s-%d", base, n+1)
 }
 
 func (r *Runner) hasBranchCommits(branch string) bool {

@@ -10,10 +10,18 @@ import (
 
 const indexName = "notes"
 
+// EmbedderConfig holds settings for configuring Meilisearch's built-in embedder.
+type EmbedderConfig struct {
+	Source string // "openAi" or "" (disabled)
+	Model  string
+	APIKey string
+}
+
 // Client wraps the Meilisearch SDK for vault search operations.
 type Client struct {
-	ms    meilisearch.ServiceManager
-	index meilisearch.IndexManager
+	ms             meilisearch.ServiceManager
+	index          meilisearch.IndexManager
+	hybridEnabled  bool
 }
 
 // New creates a Meilisearch client. Host defaults to http://127.0.0.1:7700.
@@ -87,6 +95,37 @@ func (c *Client) EnsureIndex() error {
 		return fmt.Errorf("set sortable attributes: %w", err)
 	}
 	return c.waitForTask(task.TaskUID)
+}
+
+// ConfigureEmbedder sets up Meilisearch's built-in embedder for hybrid search.
+// If cfg.Source is empty, embeddings are disabled and search falls back to keyword-only.
+func (c *Client) ConfigureEmbedder(cfg EmbedderConfig) error {
+	if cfg.Source == "" {
+		return nil
+	}
+
+	embedder := meilisearch.Embedder{
+		Source: meilisearch.EmbedderSource(cfg.Source),
+		Model:  cfg.Model,
+		DocumentTemplate: "A {{doc.content_type}} note titled {{doc.title}}. " +
+			"Tags: {{doc.tags}}. {{doc.summary}} {{doc.body}}",
+		DocumentTemplateMaxBytes: 2000,
+	}
+	if cfg.APIKey != "" {
+		embedder.APIKey = cfg.APIKey
+	}
+
+	task, err := c.index.UpdateEmbedders(map[string]meilisearch.Embedder{
+		"default": embedder,
+	})
+	if err != nil {
+		return fmt.Errorf("configure embedder: %w", err)
+	}
+	if err := c.waitForTask(task.TaskUID); err != nil {
+		return err
+	}
+	c.hybridEnabled = true
+	return nil
 }
 
 // IndexNote upserts a single document into the notes index.
@@ -209,16 +248,23 @@ type SimilarNote struct {
 }
 
 // FindSimilar returns the top N most similar notes to the given query text.
-// Uses Meilisearch ranking scores to measure similarity.
+// Uses hybrid search (keyword + semantic) when embeddings are configured,
+// falls back to keyword-only otherwise.
 func (c *Client) FindSimilar(query string, limit int64) ([]SimilarNote, error) {
 	if limit == 0 {
 		limit = 5
 	}
 
 	req := &meilisearch.SearchRequest{
-		Limit:            limit,
-		ShowRankingScore: true,
+		Limit:                limit,
+		ShowRankingScore:     true,
 		AttributesToRetrieve: []string{"id", "title", "body", "summary", "domain", "file_path"},
+	}
+	if c.hybridEnabled {
+		req.Hybrid = &meilisearch.SearchRequestHybrid{
+			SemanticRatio: 0.7,
+			Embedder:      "default",
+		}
 	}
 
 	resp, err := c.index.Search(query, req)

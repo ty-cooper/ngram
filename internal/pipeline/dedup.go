@@ -15,7 +15,7 @@ import (
 	"github.com/ty-cooper/ngram/internal/vault"
 )
 
-const dedupThreshold = 0.85
+const dedupThreshold = 0.75 // Lowered for hybrid (semantic + keyword) score distribution
 
 // DedupDecision is the master agent's decision.
 type DedupDecision struct {
@@ -148,9 +148,9 @@ NEW — the content is genuinely new, not covered by existing notes.
 DUPLICATE — the content is already fully captured in an existing note. Specify which note it duplicates and why.
 
 Decision matrix:
-- Similarity >= 0.95 AND same domain/context → DUPLICATE
-- Similarity >= 0.85 AND related content → APPEND to existing note
-- Similarity >= 0.85 AND different angle → NEW (keep both)
+- Similarity >= 0.90 AND same domain/context → DUPLICATE
+- Similarity >= 0.75 AND related content → APPEND to existing note
+- Similarity >= 0.75 AND different angle → NEW (keep both)
 
 Return ONLY valid JSON:
 {"decision": "append|new|duplicate", "target_note_id": "id", "reason": "...", "append_content": "...", "link_suggestions": ["id1"]}

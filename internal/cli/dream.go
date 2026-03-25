@@ -33,9 +33,14 @@ Use --dry-run to see what would change without modifying anything.`,
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 
-		searchClient, err := search.New("http://127.0.0.1:7700", "")
+		searchClient, err := search.New(cfg.Meilisearch.Host, cfg.Meilisearch.APIKey)
 		if err != nil {
 			return fmt.Errorf("connect to meilisearch: %w", err)
+		}
+		if embCfg := buildEmbedderConfig(cfg); embCfg.Source != "" {
+			if err := searchClient.ConfigureEmbedder(embCfg); err != nil {
+				log.Printf("dream: embedder config failed: %v (using keyword search)", err)
+			}
 		}
 
 		runner := &dream.Runner{

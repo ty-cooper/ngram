@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/ty-cooper/ngram/internal/config"
 	"github.com/ty-cooper/ngram/internal/daemon"
 	"github.com/ty-cooper/ngram/internal/llm"
 	"github.com/ty-cooper/ngram/internal/pipeline"
@@ -73,6 +74,13 @@ func upRun(cmd *cobra.Command, args []string) error {
 	sc, err := search.New(c.Meilisearch.Host, c.Meilisearch.APIKey)
 	if err == nil && sc.Healthy() {
 		sc.EnsureIndex()
+		if embCfg := buildEmbedderConfig(c); embCfg.Source != "" {
+			if err := sc.ConfigureEmbedder(embCfg); err != nil {
+				log.Printf("warn: embedder config failed: %v (hybrid search disabled)", err)
+			} else {
+				fmt.Println("✓ hybrid search enabled")
+			}
+		}
 		searchClient = sc
 	}
 
@@ -129,4 +137,20 @@ func upRun(cmd *cobra.Command, args []string) error {
 	}
 
 	return d.Run(context.Background())
+}
+
+func buildEmbedderConfig(c *config.Config) search.EmbedderConfig {
+	switch c.Model {
+	case "cloud", "":
+		if c.Embeddings.OpenAIAPIKey == "" {
+			return search.EmbedderConfig{}
+		}
+		return search.EmbedderConfig{
+			Source: "openAi",
+			Model:  "text-embedding-3-small",
+			APIKey: c.Embeddings.OpenAIAPIKey,
+		}
+	default:
+		return search.EmbedderConfig{}
+	}
 }

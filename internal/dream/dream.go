@@ -12,15 +12,17 @@ import (
 
 	"github.com/ty-cooper/ngram/internal/llm"
 	"github.com/ty-cooper/ngram/internal/search"
+	"github.com/ty-cooper/ngram/internal/taxonomy"
 )
 
 type Action struct {
-	Type        string `json:"type"` // merge, archive, recluster, retag, nothing
+	Type        string   `json:"type"` // merge, archive, recluster, retag, nothing
 	NoteIDs     []string `json:"note_ids"`
-	Reason      string `json:"reason"`
-	MergedTitle string `json:"merged_title,omitempty"`
-	MergedBody  string `json:"merged_body,omitempty"`
-	NewCluster  string `json:"new_cluster,omitempty"`
+	Reason      string   `json:"reason"`
+	MergedTitle string   `json:"merged_title,omitempty"`
+	MergedBody  string   `json:"merged_body,omitempty"`
+	OldClusters []string `json:"old_clusters,omitempty"`
+	NewCluster  string   `json:"new_cluster,omitempty"`
 	NewTags     []string `json:"new_tags,omitempty"`
 }
 
@@ -192,7 +194,7 @@ func (r *Runner) findDuplicates(ctx context.Context, notes []noteEntry) ([]dupGr
 			if seen[hit.ID] {
 				continue
 			}
-			if hit.Score < 0.7 {
+			if hit.Score < 0.6 { // Lowered for hybrid search score distribution
 				continue
 			}
 			matches = append(matches, noteEntry{
@@ -271,8 +273,22 @@ func (r *Runner) qualitySweep(ctx context.Context, notes []noteEntry) ([]Action,
 }
 
 func (r *Runner) clusterSweep(ctx context.Context, notes []noteEntry) ([]Action, error) {
-	// Collect all clusters.
-	clusterNotes := map[string][]string{} // cluster -> note IDs
+	// Load allowed clusters from taxonomy.
+	tc, err := taxonomy.LoadClusters(r.VaultPath)
+	if err != nil {
+		return nil, fmt.Errorf("load topic clusters: %w", err)
+	}
+
+	// Build allowed cluster set from taxonomy.
+	allowed := map[string]bool{}
+	for _, dc := range tc.Domains {
+		for name := range dc.Clusters {
+			allowed[name] = true
+		}
+	}
+
+	// Collect clusters actually in use from notes.
+	clusterNotes := map[string][]string{}
 	for _, n := range notes {
 		if n.Cluster != "" {
 			clusterNotes[n.Cluster] = append(clusterNotes[n.Cluster], n.ID)
@@ -283,18 +299,29 @@ func (r *Runner) clusterSweep(ctx context.Context, notes []noteEntry) ([]Action,
 		return nil, nil
 	}
 
-	clusters := make([]string, 0, len(clusterNotes))
+	inUse := make([]string, 0, len(clusterNotes))
 	for c := range clusterNotes {
-		clusters = append(clusters, c)
+		inUse = append(inUse, c)
+	}
+
+	allowedList := make([]string, 0, len(allowed))
+	for c := range allowed {
+		allowedList = append(allowedList, c)
 	}
 
 	prompt := fmt.Sprintf(`Review these topic clusters for a knowledge base. Identify any that are near-synonyms and should be merged.
 
-Clusters: %s
+Clusters in use: %s
 
-For each merge, specify which clusters to combine and the canonical name.
-Return a JSON array. If no merges needed, return [].
-[{"type":"recluster","note_ids":[],"reason":"...","new_cluster":"canonical-name"}]`, strings.Join(clusters, ", "))
+Allowed clusters (from taxonomy): %s
+
+Rules:
+- new_cluster MUST be one of the allowed clusters. If none fits, return [].
+- old_clusters lists the clusters being replaced.
+
+For each merge, return:
+[{"type":"recluster","old_clusters":["old-name-1","old-name-2"],"reason":"...","new_cluster":"canonical-name"}]
+If no merges needed, return [].`, strings.Join(inUse, ", "), strings.Join(allowedList, ", "))
 
 	out, err := r.LLM.Run(ctx, prompt)
 	if err != nil {
@@ -306,7 +333,17 @@ Return a JSON array. If no merges needed, return [].
 	if err := json.Unmarshal(out, &actions); err != nil {
 		return nil, fmt.Errorf("parse cluster sweep: %w", err)
 	}
-	return actions, nil
+
+	// Filter out any actions with new_cluster not in allowed set.
+	var valid []Action
+	for _, a := range actions {
+		if allowed[a.NewCluster] {
+			valid = append(valid, a)
+		} else {
+			log.Printf("dream: dropping recluster → %q (not in taxonomy)", a.NewCluster)
+		}
+	}
+	return valid, nil
 }
 
 func stripCodeFences(data []byte) []byte {
