@@ -91,6 +91,8 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 		if p.Taxonomy != nil {
 			structured.Domain = p.Taxonomy.ResolveDomain(structured.Domain)
 			structured.Tags = p.Taxonomy.ResolveTags(structured.Tags)
+			p.Taxonomy.RegisterTags(structured.Tags, p.VaultPath)
+			p.Taxonomy.RegisterDomain(structured.Domain, p.VaultPath)
 		}
 
 		// Dedup check.
@@ -375,6 +377,8 @@ func (p *Processor) processImage(ctx context.Context, inboxPath string, start ti
 		if p.Taxonomy != nil {
 			structured.Domain = p.Taxonomy.ResolveDomain(structured.Domain)
 			structured.Tags = p.Taxonomy.ResolveTags(structured.Tags)
+			p.Taxonomy.RegisterTags(structured.Tags, p.VaultPath)
+			p.Taxonomy.RegisterDomain(structured.Domain, p.VaultPath)
 		}
 
 		processed := &ProcessedNote{

@@ -10,7 +10,6 @@ import (
 )
 
 // StructuringSystemPrompt guides Claude on how to structure notes.
-// JSON format is enforced by the schema, not the prompt.
 const StructuringSystemPrompt = `You split raw input into atomic notes. One concept per note. If the input covers one topic, return one note. If it covers five topics, return five notes.
 
 RULES:
@@ -21,6 +20,12 @@ RULES:
 - Keep the original specific values in the explanation text, just genericize the command blocks
 - Summary under 120 chars
 - Google developer docs style: declarative, present tense, no filler
+
+TAGS (STRICT):
+- Maximum 5 tags per note. Most notes need 2-3. Each tag must earn its place.
+- HEAVILY prefer existing tags from the ALLOWED TAGS list. Only create a new tag if NO existing tag fits.
+- Tags should be specific and useful for retrieval, not generic filler like "security" or "tool".
+- Do NOT create near-duplicates of existing tags (e.g. "nmap-scanning" when "nmap" exists).
 
 DISCARD:
 If the input is empty, junk, test data, or contains no extractable knowledge, return {"notes": [], "discard": true, "discard_reason": "..."}. Do not force-create notes from garbage.
@@ -36,26 +41,37 @@ TOOL-PARSED OUTPUT:
 If the input contains a "## Parsed Output" section, it was pre-structured by a tool parser. Preserve its tables and structure in the body. Use the parsed data to inform the title, summary, and tags. The "## Raw Output" section contains the original tool output for reference — include key details but don't reproduce the entire raw dump.`
 
 // BuildStructuringPrompt creates the user prompt sent to Claude.
-// vaultPath is used to discover existing domain/cluster folders for consistency.
+// Merges canonical taxonomy tags with discovered vault tags into one authoritative list.
 func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string, vaultPath ...string) string {
 	var b strings.Builder
 
 	b.WriteString("Split this into atomic notes. One concept per note. Genericize commands with {{PLACEHOLDER}} syntax.\n\n")
 
 	if domains := tax.CanonicalDomainList(); len(domains) > 0 {
-		fmt.Fprintf(&b, "CANONICAL DOMAINS: %s\n", strings.Join(domains, ", "))
-		b.WriteString("Use one of these if the content matches. Propose a new domain only if none fit.\n\n")
-	}
-	if tags := tax.CanonicalTagList(); len(tags) > 0 {
-		fmt.Fprintf(&b, "CANONICAL TAGS: %s\n", strings.Join(tags, ", "))
-		b.WriteString("Use canonical tags when applicable. You may propose new tags.\n\n")
+		fmt.Fprintf(&b, "ALLOWED DOMAINS: %s\n", strings.Join(domains, ", "))
+		b.WriteString("Use one of these. Only propose a new domain if none fit.\n\n")
 	}
 
-	// Inject existing tags from vault notes so Claude reuses them.
+	// Build unified tag list: taxonomy canonical + discovered from vault.
+	allTags := make(map[string]bool)
+	for _, t := range tax.CanonicalTagList() {
+		allTags[t] = true
+	}
 	if len(vaultPath) > 0 && vaultPath[0] != "" {
-		if existing := discoverTags(vaultPath[0]); len(existing) > 0 {
-			fmt.Fprintf(&b, "EXISTING TAGS (reuse these, do not create near-duplicates):\n%s\n\n", strings.Join(existing, ", "))
+		for _, t := range discoverTags(vaultPath[0]) {
+			allTags[t] = true
 		}
+	}
+
+	if len(allTags) > 0 {
+		tagList := make([]string, 0, len(allTags))
+		for t := range allTags {
+			tagList = append(tagList, t)
+		}
+		fmt.Fprintf(&b, "ALLOWED TAGS: %s\n", strings.Join(tagList, ", "))
+		b.WriteString("Use tags from this list. Only create a new tag if NONE of these fit. Max 5 tags per note.\n\n")
+	} else {
+		b.WriteString("No existing tags yet. Create concise, specific tags. Max 5 per note.\n\n")
 	}
 
 	b.WriteString("RAW NOTE:\n")
@@ -64,21 +80,18 @@ func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string, vaultPath
 	return b.String()
 }
 
-// discoverTags scans knowledge/ for existing tags in frontmatter.
+// discoverTags scans all knowledge notes (recursively) for existing tags in frontmatter.
 func discoverTags(vaultPath string) []string {
-	notesDir := filepath.Join(vaultPath, "knowledge")
-	entries, err := os.ReadDir(notesDir)
-	if err != nil {
-		return nil
-	}
 	tagSet := make(map[string]bool)
-	for _, e := range entries {
-		if !strings.HasSuffix(e.Name(), ".md") {
-			continue
+	knowledgeDir := filepath.Join(vaultPath, "knowledge")
+
+	filepath.Walk(knowledgeDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".md") {
+			return nil
 		}
-		data, err := os.ReadFile(filepath.Join(notesDir, e.Name()))
+		data, err := os.ReadFile(path)
 		if err != nil {
-			continue
+			return nil
 		}
 		inFM := false
 		inTags := false
@@ -105,7 +118,9 @@ func discoverTags(vaultPath string) []string {
 				inTags = false
 			}
 		}
-	}
+		return nil
+	})
+
 	var tags []string
 	for t := range tagSet {
 		tags = append(tags, t)

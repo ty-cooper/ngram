@@ -131,3 +131,59 @@ func (t *Taxonomy) CanonicalDomainList() []string {
 	}
 	return domains
 }
+
+// IsKnownTag returns true if the tag exists as a canonical name or alias.
+func (t *Taxonomy) IsKnownTag(tag string) bool {
+	lower := strings.ToLower(tag)
+	if _, ok := t.Tags[lower]; ok {
+		return true
+	}
+	_, ok := t.tagAliases[lower]
+	return ok
+}
+
+// RegisterTags adds any unknown tags to the taxonomy as new canonical entries
+// and persists the updated taxonomy to disk. First-come-first-serve.
+func (t *Taxonomy) RegisterTags(tags []string, vaultPath string) {
+	dirty := false
+	for _, tag := range tags {
+		if tag == "" {
+			continue
+		}
+		if !t.IsKnownTag(tag) {
+			t.Tags[strings.ToLower(tag)] = TagEntry{}
+			dirty = true
+		}
+	}
+	if dirty {
+		t.buildAliasMap()
+		t.save(vaultPath)
+	}
+}
+
+// RegisterDomain adds an unknown domain to the taxonomy and persists.
+func (t *Taxonomy) RegisterDomain(domain string, vaultPath string) {
+	if domain == "" {
+		return
+	}
+	lower := strings.ToLower(domain)
+	if _, ok := t.Domains[lower]; ok {
+		return
+	}
+	if _, ok := t.domainAliases[lower]; ok {
+		return
+	}
+	t.Domains[lower] = DomainEntry{}
+	t.buildAliasMap()
+	t.save(vaultPath)
+}
+
+func (t *Taxonomy) save(vaultPath string) {
+	path := filepath.Join(vaultPath, "_meta", "taxonomy.yml")
+	data, err := yaml.Marshal(t)
+	if err != nil {
+		return
+	}
+	header := []byte("# Canonical tags and domains for Ngram vault.\n# Auto-populated as notes are processed. First tag wins as canonical.\n\n")
+	os.WriteFile(path, append(header, data...), 0o644)
+}

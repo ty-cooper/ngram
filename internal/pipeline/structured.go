@@ -17,7 +17,7 @@ type StructuredNote struct {
 	ContentType  string   `json:"content_type" jsonschema:"description=Note type,enum=knowledge,enum=reference,enum=log,enum=link,enum=media,required=true"`
 	Domain       string   `json:"domain,omitempty" jsonschema:"description=Knowledge domain"`
 	TopicCluster string   `json:"topic_cluster,omitempty" jsonschema:"description=Topic cluster within domain"`
-	Tags         []string `json:"tags" jsonschema:"description=Tags for organization including domain and topic,required=true"`
+	Tags         []string `json:"tags" jsonschema:"description=Tags for organization. Max 5. Prefer existing tags.,required=true,maxItems=5"`
 }
 
 // StructuredNotesResponse is the top-level response from the structuring LLM call.
@@ -88,6 +88,10 @@ func ValidateResponse(resp *StructuredNotesResponse) ([]*StructuredNote, error) 
 		}
 		if note.ContentType == "" {
 			note.ContentType = "knowledge"
+		}
+		// Hard cap at 5 tags.
+		if len(note.Tags) > 5 {
+			note.Tags = note.Tags[:5]
 		}
 		result = append(result, note)
 	}
