@@ -268,15 +268,18 @@ func (p *Processor) processBundle(ctx context.Context, inboxPath string, start t
 		return fmt.Errorf("ensure dir %s: %w", dir, err)
 	}
 
-	// Embed screenshots in the note body and copy files alongside the note.
+	// Copy screenshots to _assets/ and embed links in the note.
+	assetsDir := filepath.Join(p.VaultPath, "_assets")
+	vault.EnsureDir(assetsDir)
 	var screenshots []string
 	for _, item := range bundle.Items {
 		if item.Type == "screenshot" {
 			src := filepath.Join(bundleDir, item.File)
-			dst := filepath.Join(destDir, item.File)
+			assetName := fmt.Sprintf("%s-%s", processed.ID, item.File)
+			dst := filepath.Join(assetsDir, assetName)
 			if data, err := os.ReadFile(src); err == nil {
 				os.WriteFile(dst, data, 0o644)
-				screenshots = append(screenshots, item.File)
+				screenshots = append(screenshots, assetName)
 			}
 		}
 	}
@@ -392,12 +395,15 @@ func (p *Processor) processImage(ctx context.Context, inboxPath string, start ti
 			continue
 		}
 
-		// Copy image alongside the note.
-		imgDest := filepath.Join(destDir, filepath.Base(inboxPath))
+		// Copy image to _assets/ and link from the note.
+		assetsDir := filepath.Join(p.VaultPath, "_assets")
+		vault.EnsureDir(assetsDir)
+		imgName := fmt.Sprintf("%s-%s", processed.ID, filepath.Base(inboxPath))
+		imgDest := filepath.Join(assetsDir, imgName)
 		if imgData, err := os.ReadFile(procPath); err == nil {
 			os.WriteFile(imgDest, imgData, 0o644)
-			processed.Evidence.Screenshots = []string{filepath.Base(inboxPath)}
-			processed.Body += fmt.Sprintf("\n\n## Source Image\n\n![[%s]]\n", filepath.Base(inboxPath))
+			processed.Evidence.Screenshots = []string{imgName}
+			processed.Body += fmt.Sprintf("\n\n## Source Image\n\n![[%s]]\n", imgName)
 		}
 
 		destPath := filepath.Join(destDir, filename)
