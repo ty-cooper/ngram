@@ -29,7 +29,6 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&flagTitle, "title", "t", "", "explicit note title")
 
-	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(boxCmd)
 	rootCmd.AddCommand(phaseCmd)
 	rootCmd.AddCommand(completionCmd)
