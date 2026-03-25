@@ -3,13 +3,16 @@ package llm
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/567-labs/instructor-go/pkg/instructor"
+	anthropic "github.com/liushuangls/go-anthropic/v2"
 )
 
 var (
@@ -17,12 +20,16 @@ var (
 	ErrAuthExpired = errors.New("anthropic API key missing or invalid")
 )
 
-// Runner wraps Anthropic API calls via the official Go SDK.
+const defaultModel = "claude-sonnet-4-6-20250514"
+
+// Runner wraps Anthropic API calls via instructor-go for type-safe structured output
+// and raw client for free-text responses.
 type Runner struct {
-	Model        string // "cloud", "local", "off", "mock"
+	Model        string // "cloud", "off", "mock"
 	VaultPath    string
-	MockResponse []byte // For testing: if set, Run returns this instead of calling API.
-	client       anthropic.Client
+	MockResponse []byte // For testing: if set, returns this instead of calling API.
+	instructor   *instructor.InstructorAnthropic
+	rawClient    *anthropic.Client
 	hasClient    bool
 }
 
@@ -33,7 +40,17 @@ func NewRunner(model, vaultPath string) *Runner {
 		VaultPath: vaultPath,
 	}
 	if model == "cloud" || model == "" {
-		r.client = anthropic.NewClient()
+		apiKey := os.Getenv("ANTHROPIC_API_KEY")
+		if apiKey == "" {
+			return r
+		}
+		raw := anthropic.NewClient(apiKey)
+		r.rawClient = raw
+		r.instructor = instructor.FromAnthropic(
+			raw,
+			instructor.WithMode(instructor.ModeJSONSchema),
+			instructor.WithMaxRetries(3),
+		)
 		r.hasClient = true
 	}
 	return r
@@ -49,12 +66,11 @@ func NewMockRunner(response []byte) *Runner {
 
 type runConfig struct {
 	systemPrompt string
-	jsonSchema   map[string]any // If set, use OutputConfig for guaranteed schema compliance.
 	maxTokens    int
 	images       []string
 }
 
-// RunOption configures a Run call.
+// RunOption configures a Run or Instruct call.
 type RunOption func(*runConfig)
 
 func WithSystemPrompt(prompt string) RunOption {
@@ -69,20 +85,17 @@ func WithImages(paths []string) RunOption {
 	return func(c *runConfig) { c.images = paths }
 }
 
-// WithJSONSchema enforces structured output via Anthropic's OutputConfig.
-// The API guarantees the response matches this JSON schema exactly.
-func WithJSONSchema(schema map[string]any) RunOption {
-	return func(c *runConfig) { c.jsonSchema = schema }
-}
-
-// Run sends a prompt to the Anthropic API and returns the text response.
-func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]byte, error) {
+// Instruct sends a prompt and unmarshals the response into a typed struct.
+// Uses instructor-go for automatic schema generation, validation, and retries.
+func (r *Runner) Instruct(ctx context.Context, prompt string, result any, opts ...RunOption) error {
 	if r.Model == "off" {
-		return nil, ErrModelOff
+		return ErrModelOff
 	}
-
 	if r.Model == "mock" && r.MockResponse != nil {
-		return r.MockResponse, nil
+		return json.Unmarshal(r.MockResponse, result)
+	}
+	if !r.hasClient {
+		return ErrAuthExpired
 	}
 
 	cfg := &runConfig{maxTokens: 4096}
@@ -90,77 +103,140 @@ func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]b
 		o(cfg)
 	}
 
-	if !r.hasClient {
-		return nil, ErrAuthExpired
-	}
+	content := buildMessageContent(prompt, cfg.images)
 
-	// Build content blocks.
-	var contentBlocks []anthropic.ContentBlockParamUnion
-
-	// Add images first if present.
-	for _, imgPath := range cfg.images {
-		data, err := os.ReadFile(imgPath)
-		if err != nil {
-			continue
-		}
-		ext := strings.ToLower(filepath.Ext(imgPath))
-		mediaType := "image/png"
-		switch ext {
-		case ".jpg", ".jpeg":
-			mediaType = "image/jpeg"
-		case ".gif":
-			mediaType = "image/gif"
-		case ".webp":
-			mediaType = "image/webp"
-		}
-		contentBlocks = append(contentBlocks, anthropic.NewImageBlockBase64(mediaType, base64.StdEncoding.EncodeToString(data)))
-	}
-
-	// Add text prompt.
-	contentBlocks = append(contentBlocks, anthropic.NewTextBlock(prompt))
-
-	params := anthropic.MessageNewParams{
-		Model:     anthropic.ModelClaudeSonnet4_6,
-		MaxTokens: int64(cfg.maxTokens),
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(contentBlocks...),
+	req := anthropic.MessagesRequest{
+		Model:     anthropic.Model(defaultModel),
+		MaxTokens: cfg.maxTokens,
+		Messages: []anthropic.Message{
+			{Role: anthropic.RoleUser, Content: content},
 		},
 	}
 
 	if cfg.systemPrompt != "" {
-		params.System = []anthropic.TextBlockParam{
-			{Text: cfg.systemPrompt, Type: "text"},
-		}
+		req.System = cfg.systemPrompt
 	}
 
-	// Enforce JSON schema via OutputConfig. API guarantees schema compliance.
-	if cfg.jsonSchema != nil {
-		params.OutputConfig = anthropic.OutputConfigParam{
-			Format: anthropic.JSONOutputFormatParam{
-				Schema: cfg.jsonSchema,
-			},
-		}
+	_, err := r.instructor.CreateMessages(ctx, req, result)
+	if err != nil {
+		return fmt.Errorf("instructor: %w", err)
+	}
+	return nil
+}
+
+// Run sends a prompt and returns the raw text response.
+// Use for free-text responses (report sections, RAG synthesis).
+func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]byte, error) {
+	if r.Model == "off" {
+		return nil, ErrModelOff
+	}
+	if r.Model == "mock" && r.MockResponse != nil {
+		return r.MockResponse, nil
+	}
+	if !r.hasClient {
+		return nil, ErrAuthExpired
 	}
 
-	msg, err := r.client.Messages.New(ctx, params)
+	cfg := &runConfig{maxTokens: 4096}
+	for _, o := range opts {
+		o(cfg)
+	}
+
+	content := buildMessageContent(prompt, cfg.images)
+
+	req := anthropic.MessagesRequest{
+		Model:     anthropic.Model(defaultModel),
+		MaxTokens: cfg.maxTokens,
+		Messages: []anthropic.Message{
+			{Role: anthropic.RoleUser, Content: content},
+		},
+	}
+
+	if cfg.systemPrompt != "" {
+		req.System = cfg.systemPrompt
+	}
+
+	resp, err := r.rawClient.CreateMessages(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("anthropic api: %w", err)
 	}
 
-	// Extract text from response.
 	var result strings.Builder
-	for _, block := range msg.Content {
+	for _, block := range resp.Content {
 		if block.Type == "text" {
-			result.WriteString(block.Text)
+			result.WriteString(*block.Text)
 		}
 	}
 
 	text := strings.TrimSpace(result.String())
 	if text == "" {
-		return nil, fmt.Errorf("anthropic api: empty response (stop_reason: %s)", msg.StopReason)
+		return nil, fmt.Errorf("anthropic api: empty response (stop_reason: %s)", resp.StopReason)
+	}
+	return []byte(text), nil
+}
+
+// buildMessageContent creates Anthropic message content blocks with optional images.
+func buildMessageContent(prompt string, images []string) []anthropic.MessageContent {
+	var content []anthropic.MessageContent
+
+	for _, imgPath := range images {
+		data, mediaType, err := readImage(imgPath)
+		if err != nil {
+			continue
+		}
+		content = append(content, anthropic.NewImageMessageContent(
+			anthropic.MessageContentSource{
+				Type:      "base64",
+				MediaType: mediaType,
+				Data:      base64.StdEncoding.EncodeToString(data),
+			},
+		))
 	}
 
-	return []byte(text), nil
+	content = append(content, anthropic.NewTextMessageContent(prompt))
+	return content
+}
+
+// readImage reads an image file, converting HEIC/HEIF to JPEG if needed.
+func readImage(imgPath string) ([]byte, string, error) {
+	ext := strings.ToLower(filepath.Ext(imgPath))
+
+	if ext == ".heic" || ext == ".heif" {
+		tmpFile := imgPath + ".converted.jpg"
+		defer os.Remove(tmpFile)
+
+		cmd := execCommand("sips", "-s", "format", "jpeg", imgPath, "--out", tmpFile)
+		if err := cmd.Run(); err != nil {
+			return nil, "", fmt.Errorf("convert HEIC: %w", err)
+		}
+		data, err := os.ReadFile(tmpFile)
+		if err != nil {
+			return nil, "", err
+		}
+		return data, "image/jpeg", nil
+	}
+
+	data, err := os.ReadFile(imgPath)
+	if err != nil {
+		return nil, "", err
+	}
+
+	mediaType := "image/png"
+	switch ext {
+	case ".jpg", ".jpeg":
+		mediaType = "image/jpeg"
+	case ".gif":
+		mediaType = "image/gif"
+	case ".webp":
+		mediaType = "image/webp"
+	}
+	return data, mediaType, nil
+}
+
+var execCommand = newExecCommand
+
+func newExecCommand(name string, args ...string) *exec.Cmd {
+	return exec.Command(name, args...)
 }
 
 // CheckAuth verifies the API key is set and valid.
@@ -168,12 +244,9 @@ func (r *Runner) CheckAuth(ctx context.Context) error {
 	if r.Model == "off" || r.Model == "local" || r.Model == "mock" {
 		return nil
 	}
-
 	if os.Getenv("ANTHROPIC_API_KEY") == "" {
 		return ErrAuthExpired
 	}
-
-	// Quick API call to verify key works.
 	_, err := r.Run(ctx, "respond with ok", WithMaxTokens(10))
 	if err != nil {
 		return fmt.Errorf("auth check: %w", err)

@@ -9,33 +9,6 @@ import (
 	"github.com/ty-cooper/ngram/internal/taxonomy"
 )
 
-// noteSchema defines a single atomic note.
-var noteSchema = map[string]any{
-	"type":     "object",
-	"required": []string{"title", "summary", "body", "content_type", "tags"},
-	"properties": map[string]any{
-		"title":        map[string]any{"type": "string", "description": "Concise descriptive title"},
-		"summary":      map[string]any{"type": "string", "description": "One line summary, under 120 characters"},
-		"body":         map[string]any{"type": "string", "description": "Structured markdown body with copyable command blocks using {{PLACEHOLDER}} syntax"},
-		"content_type": map[string]any{"type": "string", "enum": []string{"knowledge", "reference", "log", "link", "media"}},
-		"tags":         map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Tags for organization. Include domain and topic as tags."},
-	},
-	"additionalProperties": false,
-}
-
-// NoteJSONSchema wraps notes in an array so one input can produce multiple atomic notes.
-var NoteJSONSchema = map[string]any{
-	"type":     "object",
-	"required": []string{"notes"},
-	"properties": map[string]any{
-		"notes": map[string]any{
-			"type":  "array",
-			"items": noteSchema,
-		},
-	},
-	"additionalProperties": false,
-}
-
 // StructuringSystemPrompt guides Claude on how to structure notes.
 // JSON format is enforced by the schema, not the prompt.
 const StructuringSystemPrompt = `You split raw input into atomic notes. One concept per note. If the input covers one topic, return one note. If it covers five topics, return five notes.
@@ -48,6 +21,9 @@ RULES:
 - Keep the original specific values in the explanation text, just genericize the command blocks
 - Summary under 120 chars
 - Google developer docs style: declarative, present tense, no filler
+
+DISCARD:
+If the input is empty, junk, test data, or contains no extractable knowledge, return {"notes": [], "discard": true, "discard_reason": "..."}. Do not force-create notes from garbage.
 
 CONTENT TYPES:
 - knowledge: concepts, explanations (quizzed)

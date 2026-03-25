@@ -11,13 +11,20 @@ import (
 
 // StructuredNote is the JSON schema Claude returns after structuring.
 type StructuredNote struct {
-	Title        string   `json:"title"`
-	Summary      string   `json:"summary"`
-	Body         string   `json:"body"`
-	ContentType  string   `json:"content_type"`
-	Domain       string   `json:"domain"`
-	TopicCluster string   `json:"topic_cluster"`
-	Tags         []string `json:"tags"`
+	Title        string   `json:"title" jsonschema:"description=Concise descriptive title,required=true"`
+	Summary      string   `json:"summary" jsonschema:"description=One line summary under 120 characters,required=true"`
+	Body         string   `json:"body" jsonschema:"description=Structured markdown body with copyable command blocks using PLACEHOLDER syntax,required=true"`
+	ContentType  string   `json:"content_type" jsonschema:"description=Note type,enum=knowledge,enum=reference,enum=log,enum=link,enum=media,required=true"`
+	Domain       string   `json:"domain,omitempty" jsonschema:"description=Knowledge domain"`
+	TopicCluster string   `json:"topic_cluster,omitempty" jsonschema:"description=Topic cluster within domain"`
+	Tags         []string `json:"tags" jsonschema:"description=Tags for organization including domain and topic,required=true"`
+}
+
+// StructuredNotesResponse is the top-level response from the structuring LLM call.
+type StructuredNotesResponse struct {
+	Notes         []StructuredNote `json:"notes" jsonschema:"description=Atomic notes extracted from input"`
+	Discard       bool             `json:"discard,omitempty" jsonschema:"description=True if input is empty or junk with no extractable knowledge"`
+	DiscardReason string           `json:"discard_reason,omitempty" jsonschema:"description=Why input was discarded"`
 }
 
 // EvidenceChain tracks provenance for a note.
@@ -53,22 +60,26 @@ func GenerateID() string {
 // Handles both raw JSON and the Claude Code envelope {"type":"result","result":"..."}.
 // ParseStructuredNotes parses the {"notes": [...]} response from the API.
 // Returns one or more atomic notes.
-func ParseStructuredNotes(data []byte) ([]*StructuredNote, error) {
-	data = stripCodeFences(data)
+// ErrDiscard is returned when the LLM marks input as junk.
+var ErrDiscard = fmt.Errorf("input discarded by LLM")
 
-	var wrapper struct {
-		Notes []StructuredNote `json:"notes"`
+// ValidateResponse checks a StructuredNotesResponse for discard or empty results.
+// Returns validated note pointers or an error.
+func ValidateResponse(resp *StructuredNotesResponse) ([]*StructuredNote, error) {
+	if resp.Discard {
+		reason := resp.DiscardReason
+		if reason == "" {
+			reason = "no extractable knowledge"
+		}
+		return nil, fmt.Errorf("%w: %s", ErrDiscard, reason)
 	}
-	if err := json.Unmarshal(data, &wrapper); err != nil {
-		return nil, fmt.Errorf("parse structured json: %w", err)
-	}
-	if len(wrapper.Notes) == 0 {
+	if len(resp.Notes) == 0 {
 		return nil, fmt.Errorf("structured notes: empty response from LLM")
 	}
 
 	var result []*StructuredNote
-	for i := range wrapper.Notes {
-		note := &wrapper.Notes[i]
+	for i := range resp.Notes {
+		note := &resp.Notes[i]
 		if note.Title == "" {
 			note.Title = deriveTitle(note.Body)
 		}
@@ -81,6 +92,18 @@ func ParseStructuredNotes(data []byte) ([]*StructuredNote, error) {
 		result = append(result, note)
 	}
 	return result, nil
+}
+
+// ParseStructuredNotes parses raw JSON bytes into validated notes.
+// Kept for backward compat with code that receives raw []byte.
+func ParseStructuredNotes(data []byte) ([]*StructuredNote, error) {
+	data = stripCodeFences(data)
+
+	var resp StructuredNotesResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("parse structured json: %w", err)
+	}
+	return ValidateResponse(&resp)
 }
 
 // ParseStructuredJSON parses a single note. Kept for backward compat with tests.

@@ -2,7 +2,6 @@ package dream
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -16,14 +15,14 @@ import (
 )
 
 type Action struct {
-	Type        string   `json:"type"` // merge, archive, recluster, retag, nothing
-	NoteIDs     []string `json:"note_ids"`
-	Reason      string   `json:"reason"`
-	MergedTitle string   `json:"merged_title,omitempty"`
-	MergedBody  string   `json:"merged_body,omitempty"`
-	OldClusters []string `json:"old_clusters,omitempty"`
-	NewCluster  string   `json:"new_cluster,omitempty"`
-	NewTags     []string `json:"new_tags,omitempty"`
+	Type        string   `json:"type" jsonschema:"description=Action type,enum=merge,enum=archive,enum=recluster,enum=retag,enum=nothing,required=true"`
+	NoteIDs     []string `json:"note_ids" jsonschema:"description=IDs of notes affected"`
+	Reason      string   `json:"reason" jsonschema:"description=Why this action is proposed,required=true"`
+	MergedTitle string   `json:"merged_title,omitempty" jsonschema:"description=Title for merged note"`
+	MergedBody  string   `json:"merged_body,omitempty" jsonschema:"description=Body for merged note"`
+	OldClusters []string `json:"old_clusters,omitempty" jsonschema:"description=Clusters being replaced"`
+	NewCluster  string   `json:"new_cluster,omitempty" jsonschema:"description=Target cluster name"`
+	NewTags     []string `json:"new_tags,omitempty" jsonschema:"description=New tags to apply"`
 }
 
 type Report struct {
@@ -266,15 +265,9 @@ Return JSON only:
 or
 {"type":"nothing","note_ids":["id1","id2"],"reason":"..."}`, noteDescriptions.String())
 
-	out, err := r.LLM.Run(ctx, prompt)
-	if err != nil {
-		return Action{Type: "nothing"}, err
-	}
-
-	out = stripCodeFences(out)
 	var action Action
-	if err := json.Unmarshal(out, &action); err != nil {
-		return Action{Type: "nothing"}, fmt.Errorf("parse merge decision: %w", err)
+	if err := r.LLM.Instruct(ctx, prompt, &action); err != nil {
+		return Action{Type: "nothing"}, err
 	}
 	return action, nil
 }
@@ -384,15 +377,9 @@ For each merge, return:
 [{"type":"recluster","old_clusters":["old-name-1","old-name-2"],"reason":"...","new_cluster":"canonical-name"}]
 If no merges needed, return [].`, strings.Join(inUse, ", "), strings.Join(allowedList, ", "))
 
-	out, err := r.LLM.Run(ctx, prompt)
-	if err != nil {
-		return nil, err
-	}
-
-	out = stripCodeFences(out)
 	var actions []Action
-	if err := json.Unmarshal(out, &actions); err != nil {
-		return nil, fmt.Errorf("parse cluster sweep: %w", err)
+	if err := r.LLM.Instruct(ctx, prompt, &actions); err != nil {
+		return nil, err
 	}
 
 	// Filter out any actions with new_cluster not in allowed set.

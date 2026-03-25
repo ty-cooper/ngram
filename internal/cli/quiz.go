@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,7 +11,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
 	"github.com/ty-cooper/ngram/internal/llm"
-	"github.com/ty-cooper/ngram/internal/pipeline"
 	"github.com/ty-cooper/ngram/internal/quiz"
 	"github.com/ty-cooper/ngram/internal/retention"
 	"github.com/ty-cooper/ngram/internal/search"
@@ -141,18 +139,24 @@ func quizRun(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// quizQuestion is the typed response from the question generation LLM call.
+type quizQuestion struct {
+	Question string `json:"question" jsonschema:"description=The quiz question to ask,required=true"`
+}
+
+// quizGrade is the typed response from the answer grading LLM call.
+type quizGrade struct {
+	Score         int      `json:"score" jsonschema:"description=Score from 0-100,minimum=0,maximum=100,required=true"`
+	CorrectPoints []string `json:"correct_points" jsonschema:"description=Points the student got right"`
+	MissingPoints []string `json:"missing_points" jsonschema:"description=Points the student missed"`
+	Feedback      string   `json:"feedback" jsonschema:"description=2-3 sentence assessment,required=true"`
+}
+
 func generateQuestion(runner *llm.Runner, n retention.Note, body string) string {
 	prompt := quiz.BuildQuestionPrompt(filepath.Base(n.Path), n.Domain, n.TopicCluster, body)
-	out, err := runner.Run(context.Background(), prompt)
-	if err != nil {
-		return quiz.FallbackQuestion(filepath.Base(n.Path))
-	}
 
-	var result struct {
-		Question string `json:"question"`
-	}
-	clean := pipeline.StripCodeFencesExported(out)
-	if json.Unmarshal(clean, &result) != nil || result.Question == "" {
+	var result quizQuestion
+	if err := runner.Instruct(context.Background(), prompt, &result); err != nil || result.Question == "" {
 		return quiz.FallbackQuestion(filepath.Base(n.Path))
 	}
 	return result.Question
@@ -160,19 +164,9 @@ func generateQuestion(runner *llm.Runner, n retention.Note, body string) string 
 
 func gradeAnswer(runner *llm.Runner, item quiz.QuizItem, answer string) (*quiz.GradeResult, error) {
 	prompt := quiz.BuildGradingPrompt(item.Question, answer, item.NoteBody, item.Domain)
-	out, err := runner.Run(context.Background(), prompt)
-	if err != nil {
-		return nil, err
-	}
 
-	var result struct {
-		Score         int      `json:"score"`
-		CorrectPoints []string `json:"correct_points"`
-		MissingPoints []string `json:"missing_points"`
-		Feedback      string   `json:"feedback"`
-	}
-	clean := pipeline.StripCodeFencesExported(out)
-	if err := json.Unmarshal(clean, &result); err != nil {
+	var result quizGrade
+	if err := runner.Instruct(context.Background(), prompt, &result); err != nil {
 		return nil, err
 	}
 

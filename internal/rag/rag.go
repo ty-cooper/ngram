@@ -2,7 +2,6 @@ package rag
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -137,13 +136,8 @@ Question: %s
 
 Generate 2-3 alternative search queries that might find relevant notes. Return ONLY a JSON array of strings.`, question)
 
-	out, err := e.Runner.Run(ctx, planPrompt)
-	if err != nil {
-		return nil, err
-	}
-
 	var queries []string
-	if err := json.Unmarshal(stripCodeFences(out), &queries); err != nil {
+	if err := e.Runner.Instruct(ctx, planPrompt, &queries); err != nil {
 		return nil, err
 	}
 

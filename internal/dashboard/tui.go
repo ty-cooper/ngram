@@ -151,19 +151,19 @@ func (m Model) renderFindings() string {
 	}
 
 	if f.Critical > 0 {
-		b.WriteString(criticalStyle.Render(fmt.Sprintf("  ■ %d critical\n", f.Critical)))
+		b.WriteString(criticalStyle.Render("■") + fmt.Sprintf(" %d critical\n", f.Critical))
 	}
 	if f.High > 0 {
-		b.WriteString(highStyle.Render(fmt.Sprintf("  ■ %d high\n", f.High)))
+		b.WriteString(highStyle.Render("■") + fmt.Sprintf(" %d high\n", f.High))
 	}
 	if f.Medium > 0 {
-		b.WriteString(mediumStyle.Render(fmt.Sprintf("  ■ %d medium\n", f.Medium)))
+		b.WriteString(mediumStyle.Render("■") + fmt.Sprintf(" %d medium\n", f.Medium))
 	}
 	if f.Low > 0 {
-		b.WriteString(lowStyle.Render(fmt.Sprintf("  □ %d low\n", f.Low)))
+		b.WriteString(lowStyle.Render("□") + fmt.Sprintf(" %d low\n", f.Low))
 	}
 	if f.Info > 0 {
-		b.WriteString(infoStyle.Render(fmt.Sprintf("  □ %d info\n", f.Info)))
+		b.WriteString(infoStyle.Render("□") + fmt.Sprintf(" %d info\n", f.Info))
 	}
 	return b.String()
 }
@@ -174,19 +174,25 @@ func (m Model) renderCoverage() string {
 	b.WriteString("\n")
 
 	c := m.data.Coverage
-	b.WriteString(checkMark(c.Recon, "recon"))
-	b.WriteString(checkMark(c.Enum, "enum"))
-	b.WriteString(checkMark(c.Exploit, "exploit"))
-	b.WriteString(checkMark(c.Post, "post"))
-	b.WriteString(checkMark(c.Loot, "loot"))
-	return b.String()
-}
-
-func checkMark(done bool, label string) string {
-	if done {
-		return checkStyle.Render(fmt.Sprintf("  [x] %s\n", label))
+	checks := []struct {
+		done  bool
+		label string
+	}{
+		{c.Recon, "recon"},
+		{c.Enum, "enum"},
+		{c.Exploit, "exploit"},
+		{c.Post, "post"},
+		{c.Loot, "loot"},
 	}
-	return uncheckStyle.Render(fmt.Sprintf("  [ ] %s\n", label))
+	for _, ch := range checks {
+		if ch.done {
+			b.WriteString(checkStyle.Render("[x]"))
+		} else {
+			b.WriteString(uncheckStyle.Render("[ ]"))
+		}
+		b.WriteString(" " + ch.label + "\n")
+	}
+	return b.String()
 }
 
 func (m Model) renderTimeline() string {

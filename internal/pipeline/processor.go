@@ -39,6 +39,11 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 		return p.processBundle(ctx, inboxPath, start)
 	}
 
+	// Check if this is a standalone image (photo of handwritten notes, screenshot, etc).
+	if IsImage(filepath.Base(inboxPath)) {
+		return p.processImage(ctx, inboxPath, start)
+	}
+
 	// 1. Move to _processing/.
 	procPath, err := p.moveToProcessing(inboxPath)
 	if err != nil {
@@ -70,6 +75,13 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 
 	notes, err := p.structureWithRetry(ctx, body, maxRetries)
 	if err != nil {
+		if errors.Is(err, ErrDiscard) {
+			log.Printf("ngram: discarded — %v", err)
+			if archErr := p.archiveRaw(procPath); archErr != nil {
+				log.Printf("warn: archive discarded: %v", archErr)
+			}
+			return nil
+		}
 		return fmt.Errorf("structure: %w", err)
 	}
 
@@ -210,39 +222,23 @@ func (p *Processor) processBundle(ctx context.Context, inboxPath string, start t
 		}
 	}
 
-	maxRetries := p.MaxRetries
-	if maxRetries == 0 {
-		maxRetries = 2
+	// Structure via instructor.
+	opts := []llm.RunOption{
+		llm.WithSystemPrompt(StructuringSystemPrompt),
+	}
+	if len(imagePaths) > 0 {
+		opts = append(opts, llm.WithImages(imagePaths))
 	}
 
-	// Structure with retry.
-	var structured *StructuredNote
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		opts := []llm.RunOption{
-			llm.WithSystemPrompt(StructuringSystemPrompt),
-			llm.WithJSONSchema(NoteJSONSchema),
-		}
-		if len(imagePaths) > 0 {
-			opts = append(opts, llm.WithImages(imagePaths))
-		}
-
-		out, err := p.Runner.Run(ctx, prompt, opts...)
-		if err != nil {
-			return fmt.Errorf("llm call for bundle: %w", err)
-		}
-		out = stripCodeFences(out)
-
-		note, err := ParseStructuredJSON(out)
-		if err != nil {
-			if attempt < maxRetries {
-				log.Printf("warn: bundle parse failed (attempt %d): %v", attempt+1, err)
-				continue
-			}
-			return fmt.Errorf("parse bundle after %d attempts: %w", attempt+1, err)
-		}
-		structured = note
-		break
+	var resp StructuredNotesResponse
+	if err := p.Runner.Instruct(ctx, prompt, &resp, opts...); err != nil {
+		return fmt.Errorf("instruct bundle: %w", err)
 	}
+	notes, err := ValidateResponse(&resp)
+	if err != nil {
+		return fmt.Errorf("validate bundle: %w", err)
+	}
+	structured := notes[0]
 
 	// Resolve taxonomy.
 	if p.Taxonomy != nil {
@@ -338,6 +334,113 @@ func (p *Processor) processBundle(ctx context.Context, inboxPath string, start t
 	return nil
 }
 
+// processImage handles standalone image files (photos, screenshots, handwritten notes).
+// Sends the image to Claude via vision and structures the extracted content.
+func (p *Processor) processImage(ctx context.Context, inboxPath string, start time.Time) error {
+	procPath, err := p.moveToProcessing(inboxPath)
+	if err != nil {
+		return fmt.Errorf("move image to processing: %w", err)
+	}
+
+	if p.Runner.Model == "off" {
+		return p.writeRawDirect(fmt.Sprintf("---\nsource: image\n---\n\n(image: %s)\n", filepath.Base(inboxPath)), procPath)
+	}
+
+	prompt := "Extract all text, diagrams, and knowledge from this image. If it contains handwritten notes, transcribe them accurately. Structure the content as atomic notes."
+
+	var resp StructuredNotesResponse
+	if err := p.Runner.Instruct(ctx, prompt, &resp,
+		llm.WithSystemPrompt(StructuringSystemPrompt),
+		llm.WithImages([]string{procPath}),
+	); err != nil {
+		if errors.Is(err, llm.ErrModelOff) {
+			return err
+		}
+		return fmt.Errorf("instruct image: %w", err)
+	}
+
+	notes, err := ValidateResponse(&resp)
+	if err != nil {
+		if errors.Is(err, ErrDiscard) {
+			log.Printf("ngram: image discarded — %v", err)
+			return p.archiveRaw(procPath)
+		}
+		return fmt.Errorf("validate image: %w", err)
+	}
+
+	for _, structured := range notes {
+		if p.Taxonomy != nil {
+			structured.Domain = p.Taxonomy.ResolveDomain(structured.Domain)
+			structured.Tags = p.Taxonomy.ResolveTags(structured.Tags)
+		}
+
+		processed := &ProcessedNote{
+			StructuredNote: *structured,
+			ID:             GenerateID(),
+			Source:         "image",
+			Created:        time.Now().UTC(),
+			Evidence: EvidenceChain{
+				CapturedAt: time.Now().UTC().Format(time.RFC3339),
+				SourceFile: filepath.Base(inboxPath),
+			},
+		}
+
+		dir, filename := Route(processed)
+		destDir := filepath.Join(p.VaultPath, dir)
+		if err := vault.EnsureDir(destDir); err != nil {
+			log.Printf("warn: ensure dir %s: %v", dir, err)
+			continue
+		}
+
+		// Copy image alongside the note.
+		imgDest := filepath.Join(destDir, filepath.Base(inboxPath))
+		if imgData, err := os.ReadFile(procPath); err == nil {
+			os.WriteFile(imgDest, imgData, 0o644)
+			processed.Evidence.Screenshots = []string{filepath.Base(inboxPath)}
+			processed.Body += fmt.Sprintf("\n\n## Source Image\n\n![[%s]]\n", filepath.Base(inboxPath))
+		}
+
+		destPath := filepath.Join(destDir, filename)
+		content := BuildNoteContent(processed)
+		if err := atomicWrite(destPath, content); err != nil {
+			log.Printf("warn: write note: %v", err)
+			continue
+		}
+
+		relPath := filepath.Join(dir, filename)
+		log.Printf("ngram: structured image %s → %s", processed.ID, relPath)
+
+		if p.SearchClient != nil {
+			doc := search.NoteDocument{
+				ID:          processed.ID,
+				Title:       processed.Title,
+				Body:        processed.Body,
+				Summary:     processed.Summary,
+				Tags:        processed.Tags,
+				Domain:      processed.Domain,
+				ContentType: processed.ContentType,
+				FilePath:    relPath,
+				Captured:    processed.Created.Unix(),
+			}
+			if err := p.SearchClient.IndexNote(doc); err != nil {
+				log.Printf("warn: index failed for %s: %v", processed.ID, err)
+			}
+		}
+
+		p.gitCommit(relPath, processed.ID, "image")
+	}
+
+	notify.Send("Ngram", fmt.Sprintf("Structured %d note(s) from image", len(notes)))
+
+	if err := p.archiveRaw(procPath); err != nil {
+		log.Printf("warn: archive image: %v", err)
+	}
+
+	duration := time.Since(start).Milliseconds()
+	p.logUsage("image", "processor-image", duration)
+	return nil
+}
+
 func (p *Processor) moveToProcessing(path string) (string, error) {
 	procDir := filepath.Join(p.VaultPath, "_processing")
 	if err := vault.EnsureDir(procDir); err != nil {
@@ -353,34 +456,18 @@ func (p *Processor) moveToProcessing(path string) (string, error) {
 func (p *Processor) structureWithRetry(ctx context.Context, rawBody string, maxRetries int) ([]*StructuredNote, error) {
 	prompt := BuildStructuringPrompt(p.Taxonomy, rawBody, p.VaultPath)
 
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		out, err := p.Runner.Run(ctx, prompt,
-			llm.WithSystemPrompt(StructuringSystemPrompt),
-			llm.WithJSONSchema(NoteJSONSchema),
-		)
-		if err != nil {
-			if errors.Is(err, llm.ErrModelOff) {
-				return nil, err
-			}
-			return nil, fmt.Errorf("llm call (attempt %d): %w", attempt+1, err)
+	var resp StructuredNotesResponse
+	err := p.Runner.Instruct(ctx, prompt, &resp,
+		llm.WithSystemPrompt(StructuringSystemPrompt),
+	)
+	if err != nil {
+		if errors.Is(err, llm.ErrModelOff) {
+			return nil, err
 		}
-
-		out = stripCodeFences(out)
-
-		notes, err := ParseStructuredNotes(out)
-		if err != nil {
-			if attempt < maxRetries {
-				log.Printf("warn: parse failed (attempt %d), retrying: %v", attempt+1, err)
-				log.Printf("debug: raw output (%d bytes): %s", len(out), truncate(string(out), 500))
-				continue
-			}
-			return nil, fmt.Errorf("parse after %d attempts: %w", attempt+1, err)
-		}
-
-		return notes, nil
+		return nil, fmt.Errorf("instruct: %w", err)
 	}
 
-	return nil, fmt.Errorf("unreachable")
+	return ValidateResponse(&resp)
 }
 
 func (p *Processor) writeRawDirect(rawContent string, processingPath string) error {

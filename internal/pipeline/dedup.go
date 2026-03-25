@@ -19,11 +19,11 @@ const dedupThreshold = 0.75 // Lowered for hybrid (semantic + keyword) score dis
 
 // DedupDecision is the master agent's decision.
 type DedupDecision struct {
-	Decision       string   `json:"decision"`        // "append", "new", "duplicate"
-	TargetNoteID   string   `json:"target_note_id"`  // for append/duplicate
-	Reason         string   `json:"reason"`
-	AppendContent  string   `json:"append_content"`  // for append
-	LinkSuggestions []string `json:"link_suggestions"`
+	Decision        string   `json:"decision" jsonschema:"description=Action to take,enum=append,enum=new,enum=duplicate,required=true"`
+	TargetNoteID    string   `json:"target_note_id,omitempty" jsonschema:"description=ID of existing note for append or duplicate"`
+	Reason          string   `json:"reason" jsonschema:"description=Why this decision was made,required=true"`
+	AppendContent   string   `json:"append_content,omitempty" jsonschema:"description=Content to append to target note"`
+	LinkSuggestions []string `json:"link_suggestions,omitempty" jsonschema:"description=IDs of related notes to link"`
 }
 
 // DedupResult is what the dedup check returns to the processor.
@@ -107,16 +107,9 @@ func (d *Deduplicator) Check(ctx context.Context, note *StructuredNote, procPath
 func (d *Deduplicator) callMasterAgent(ctx context.Context, note *StructuredNote, similar []search.SimilarNote) (*DedupDecision, error) {
 	prompt := buildDedupPrompt(note, similar)
 
-	out, err := d.Runner.Run(ctx, prompt)
-	if err != nil {
-		return nil, err
-	}
-
-	out = stripCodeFences(out)
-
 	var decision DedupDecision
-	if err := json.Unmarshal(out, &decision); err != nil {
-		return nil, fmt.Errorf("parse dedup decision: %w", err)
+	if err := d.Runner.Instruct(ctx, prompt, &decision); err != nil {
+		return nil, err
 	}
 
 	if decision.Decision == "" {

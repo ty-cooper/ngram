@@ -81,8 +81,8 @@ func (w *Watcher) drainExisting(ctx context.Context, inboxDir string) {
 			continue
 		}
 		p := filepath.Join(inboxDir, e.Name())
-		// Accept .md files and capture bundle directories (contain manifest.yml).
-		if !strings.HasSuffix(e.Name(), ".md") && !IsBundle(p) {
+		// Accept .md files, images, and capture bundle directories.
+		if !strings.HasSuffix(e.Name(), ".md") && !IsImage(e.Name()) && !IsBundle(p) {
 			continue
 		}
 		log.Printf("ngram: processing existing %s", e.Name())
@@ -158,6 +158,17 @@ func (w *Watcher) debouncedWatch(ctx context.Context, watcher *fsnotify.Watcher)
 	}
 }
 
+// imageExtensions lists file extensions treated as images for vision processing.
+var imageExtensions = map[string]bool{
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true,
+	".webp": true, ".heic": true, ".heif": true,
+}
+
+// IsImage returns true if the file extension is a supported image type.
+func IsImage(name string) bool {
+	return imageExtensions[strings.ToLower(filepath.Ext(name))]
+}
+
 func isProcessable(event fsnotify.Event) bool {
 	if event.Op&(fsnotify.Create|fsnotify.Write) == 0 {
 		return false
@@ -166,8 +177,8 @@ func isProcessable(event fsnotify.Event) bool {
 	if strings.HasPrefix(name, ".tmp-") {
 		return false
 	}
-	// Accept .md files and capture bundle directories.
-	if strings.HasSuffix(name, ".md") {
+	// Accept .md files, images, and capture bundle directories.
+	if strings.HasSuffix(name, ".md") || IsImage(name) {
 		return true
 	}
 	// Check if it's a directory (potential capture bundle). For fsnotify Create

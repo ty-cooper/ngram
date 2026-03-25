@@ -22,18 +22,17 @@ Before using or recommending any framework, library, or dependency:
 - **Bubbletea + Lipgloss** (Charm) for terminal UI.
 - **Meilisearch** (Docker) for search. Native hybrid search with embeddings.
 - **fsnotify** for file watching.
-- **Claude Code CLI** (`claude -p`) for all LLM calls via os/exec. No direct Anthropic API HTTP calls.
+- **Anthropic Go SDK** (`github.com/anthropics/anthropic-sdk-go`) for all LLM calls. Uses `ANTHROPIC_API_KEY`.
 - **Git** auto-commit on every vault change.
 
 ## LLM Integration
 
-All AI operations shell out to the `claude` CLI binary. LLMClient interface with implementations:
-- ClaudeCodeClient (production, MODEL=cloud)
-- OllamaClient (MODEL=local, HTTP to localhost:11434)
-- MockClient (MODEL=mock, fixture scripts)
-- ResilientClient (circuit breaker wrapper)
+All AI operations use the Anthropic Go SDK directly. Runner modes:
+- cloud (production, requires ANTHROPIC_API_KEY)
+- off (skip AI, write raw)
+- mock (fixture responses for testing)
 
-No ANTHROPIC_API_KEY management. Claude Code handles its own auth.
+Vision support: JPEG, PNG, GIF, WebP natively. HEIC/HEIF converted to JPEG via macOS `sips`.
 
 ## Two-Repo Architecture
 
