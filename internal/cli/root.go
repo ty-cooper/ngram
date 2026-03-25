@@ -18,24 +18,17 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:           "n [text...]",
-	Short:         "Ngram — personal knowledge capture",
-	Long:          "Capture notes, run commands, manage engagements. Everything lands in _inbox/ for AI processing.",
-	SilenceUsage:  true,
-	SilenceErrors: true,
-}
-
-var captureCmd = &cobra.Command{
-	Use:    "capture [text...]",
-	Hidden: true,
-	Args:   cobra.ArbitraryArgs,
-	RunE:   rootRun,
+	Use:                   "n [command]",
+	Short:                 "Ngram — personal knowledge capture",
+	Long:                  "Capture notes, run commands, manage engagements. Everything lands in _inbox/ for AI processing.",
+	SilenceUsage:          true,
+	SilenceErrors:         true,
+	SuggestionsMinimumDistance: 2,
 }
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&flagTitle, "title", "t", "", "explicit note title")
 
-	rootCmd.AddCommand(captureCmd)
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(boxCmd)
 	rootCmd.AddCommand(phaseCmd)
@@ -63,25 +56,11 @@ func init() {
 }
 
 func Execute() error {
-	// Cobra treats unknown positional words as subcommand errors.
-	// We intercept os.Args to detect when the first arg is NOT a known
-	// subcommand, and route it to the capture command instead.
-	if len(os.Args) > 1 && !isSubcommand(os.Args[1]) && !strings.HasPrefix(os.Args[1], "-") {
-		os.Args = append([]string{os.Args[0], "capture"}, os.Args[1:]...)
-	} else if isPiped() && (len(os.Args) == 1 || onlyFlags(os.Args[1:])) {
-		// Pipe mode: n [-t title] (receiving stdin)
-		os.Args = insertAfter(os.Args, 0, "capture")
+	// Pipe mode: n [-t title] (receiving stdin) → route to new.
+	if isPiped() && (len(os.Args) == 1 || onlyFlags(os.Args[1:])) {
+		os.Args = insertAfter(os.Args, 0, "new")
 	}
 	return rootCmd.Execute()
-}
-
-func isSubcommand(name string) bool {
-	for _, cmd := range rootCmd.Commands() {
-		if cmd.Name() == name || cmd.HasAlias(name) {
-			return true
-		}
-	}
-	return false
 }
 
 func onlyFlags(args []string) bool {

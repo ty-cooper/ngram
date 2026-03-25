@@ -111,7 +111,6 @@ func WalkVault(vaultPath string) ([]string, error) {
 		"_processing": true,
 		"_archive":    true,
 		"_meta":       true,
-		"_trash":      true,
 		"_templates":  true,
 		".obsidian":   true,
 		".git":        true,

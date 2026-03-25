@@ -54,7 +54,10 @@ CONTENT TYPES:
 - reference: checklists, configs, commands (not quizzed)
 - log: engagement output, findings (not quizzed)
 - link: URLs (not quizzed)
-- media: screenshots (not quizzed)`
+- media: screenshots (not quizzed)
+
+TOOL-PARSED OUTPUT:
+If the input contains a "## Parsed Output" section, it was pre-structured by a tool parser. Preserve its tables and structure in the body. Use the parsed data to inform the title, summary, and tags. The "## Raw Output" section contains the original tool output for reference — include key details but don't reproduce the entire raw dump.`
 
 // BuildStructuringPrompt creates the user prompt sent to Claude.
 // vaultPath is used to discover existing domain/cluster folders for consistency.

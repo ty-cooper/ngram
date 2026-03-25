@@ -89,11 +89,8 @@ func (r *Runner) applyMerge(merge Action) error {
 			if targetPath == "" {
 				targetPath = path
 			} else {
-				// Move secondary notes to _trash/.
-				trashDir := filepath.Join(r.VaultPath, "_trash")
-				os.MkdirAll(trashDir, 0o755)
-				dest := filepath.Join(trashDir, filepath.Base(path))
-				os.Rename(path, dest)
+				// Delete secondary notes — git history preserves them.
+				os.Remove(path)
 			}
 		}
 	}
@@ -119,14 +116,11 @@ func (r *Runner) applyMerge(merge Action) error {
 }
 
 func (r *Runner) applyArchive(archive Action) error {
-	trashDir := filepath.Join(r.VaultPath, "_trash")
-	os.MkdirAll(trashDir, 0o755)
-
 	for _, id := range archive.NoteIDs {
 		path := r.findNoteByID(id)
 		if path != "" {
-			dest := filepath.Join(trashDir, filepath.Base(path))
-			if err := os.Rename(path, dest); err != nil {
+			// Delete the file — git history preserves it.
+			if err := os.Remove(path); err != nil {
 				return err
 			}
 		}

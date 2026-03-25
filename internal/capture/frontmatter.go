@@ -9,11 +9,13 @@ import (
 )
 
 type NoteMetadata struct {
-	Title   string
-	Source  string // "terminal", "pipe", "command-capture"
-	Command string // only for command-capture
-	BoxCtx  *config.BoxContext
-	Time    time.Time
+	Title         string
+	Source        string // "terminal", "pipe", "command-capture"
+	Command       string // only for command-capture
+	Tool          string // parser tool name (e.g. "nmap", "nuclei")
+	FindingsCount int    // number of parsed findings
+	BoxCtx        *config.BoxContext
+	Time          time.Time
 }
 
 // BuildFrontmatter generates YAML frontmatter for an inbox note.
@@ -26,6 +28,13 @@ func BuildFrontmatter(m NoteMetadata) string {
 
 	if m.Command != "" {
 		fmt.Fprintf(&b, "command: %q\n", m.Command)
+	}
+
+	if m.Tool != "" {
+		fmt.Fprintf(&b, "tool: %q\n", m.Tool)
+	}
+	if m.FindingsCount > 0 {
+		fmt.Fprintf(&b, "findings_count: %d\n", m.FindingsCount)
 	}
 
 	if m.BoxCtx != nil {

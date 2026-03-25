@@ -282,17 +282,55 @@ or
 func (r *Runner) qualitySweep(ctx context.Context, notes []noteEntry) ([]Action, error) {
 	var actions []Action
 	for _, note := range notes {
-		// Archive empty or near-empty notes.
-		bodyLen := len(strings.TrimSpace(note.Body))
-		if bodyLen < 20 {
+		// Strip boilerplate to measure actual content.
+		content := stripNoteBoilerplate(note.Body, note.Title)
+		contentLen := len(strings.TrimSpace(content))
+		if contentLen < 20 {
 			actions = append(actions, Action{
 				Type:    "archive",
 				NoteIDs: []string{note.ID},
-				Reason:  fmt.Sprintf("note body is %d chars, effectively empty", bodyLen),
+				Reason:  fmt.Sprintf("note content is %d chars after stripping heading/tags, effectively empty", contentLen),
 			})
 		}
 	}
 	return actions, nil
+}
+
+// stripNoteBoilerplate removes the heading, summary/italic line, and tag footer
+// from a note body to measure actual unique content.
+func stripNoteBoilerplate(body, title string) string {
+	lines := strings.Split(body, "\n")
+	var content []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip heading that matches title.
+		if strings.HasPrefix(trimmed, "# ") {
+			continue
+		}
+		// Skip italic summary lines.
+		if strings.HasPrefix(trimmed, "*") && strings.HasSuffix(trimmed, "*") && !strings.HasPrefix(trimmed, "**") {
+			continue
+		}
+		// Skip tag footer lines (e.g. "#inbox #test").
+		if trimmed != "" && trimmed[0] == '#' && !strings.HasPrefix(trimmed, "##") {
+			allTags := true
+			for _, word := range strings.Fields(trimmed) {
+				if !strings.HasPrefix(word, "#") {
+					allTags = false
+					break
+				}
+			}
+			if allTags {
+				continue
+			}
+		}
+		// Skip horizontal rules.
+		if trimmed == "---" {
+			continue
+		}
+		content = append(content, trimmed)
+	}
+	return strings.Join(content, "\n")
 }
 
 func (r *Runner) clusterSweep(ctx context.Context, notes []noteEntry) ([]Action, error) {

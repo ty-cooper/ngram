@@ -11,7 +11,6 @@ var vaultDirs = []string{
 	"_inbox",
 	"_archive",
 	"_processing",
-	"_trash",
 	"_meta",
 	"_config",
 	"_templates",

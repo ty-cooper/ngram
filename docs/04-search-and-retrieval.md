@@ -76,7 +76,7 @@ Embedder configuration is automatic during `n up` and `n dream`:
 - `model: cloud` — OpenAI `text-embedding-3-small`, requires `OPENAI_API_KEY` env var or `embeddings.openai_api_key` in `~/.ngram.yml`
 - `model: off` / no API key — falls back to keyword-only search (no embeddings)
 
-The document template sent to the embedder: `"A {{doc.content_type}} note titled {{doc.title}}. Tags: {{doc.tags}}. {{doc.summary}} {{doc.body}}"` (max 2000 bytes).
+The document template sent to the embedder: `"A {{doc.content_type}} note titled {{doc.title}}. {{doc.summary}} {{doc.body}}"` (max 2000 bytes).
 
 This eliminates the need for a custom embedding store, cosine similarity code, or separate vector DB.
 

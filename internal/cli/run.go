@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/ty-cooper/ngram/internal/capture"
 	"github.com/ty-cooper/ngram/internal/config"
+	"github.com/ty-cooper/ngram/internal/parsers"
 )
 
 var runCmd = &cobra.Command{
@@ -29,7 +30,24 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	command := strings.Join(args, " ")
+	// Extract --tool flag manually since DisableFlagParsing is on.
+	var toolFlag string
+	var commandArgs []string
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--tool" && i+1 < len(args) {
+			toolFlag = args[i+1]
+			i++
+		} else if strings.HasPrefix(args[i], "--tool=") {
+			toolFlag = strings.TrimPrefix(args[i], "--tool=")
+		} else if args[i] == "--" {
+			commandArgs = append(commandArgs, args[i+1:]...)
+			break
+		} else {
+			commandArgs = append(commandArgs, args[i])
+		}
+	}
+
+	command := strings.Join(commandArgs, " ")
 
 	var stdout, stderr bytes.Buffer
 	sh := exec.Command("/bin/sh", "-c", command)
@@ -45,9 +63,29 @@ func runRun(cmd *cobra.Command, args []string) error {
 	}
 	body = strings.TrimRight(body, "\n")
 
+	// Detect and run parser.
+	tool := toolFlag
+	if tool == "" {
+		tool = parsers.DetectTool(command)
+	}
+
+	var parsedResult *parsers.ParseResult
+	if tool != "" {
+		parsedResult, _ = parsers.Parse(tool, body)
+	}
+
+	// If parser produced structured output, prepend it.
+	if parsedResult != nil && parsedResult.Markdown != "" {
+		body = "## Parsed Output\n\n" + parsedResult.Markdown + "\n## Raw Output\n\n```\n" + body + "\n```"
+	}
+
 	title := flagTitle
 	if title == "" {
-		title = capture.AutoTitle(command)
+		if parsedResult != nil && parsedResult.Summary != "" {
+			title = parsedResult.Summary
+		} else {
+			title = capture.AutoTitle(command)
+		}
 	}
 
 	cwd, _ := os.Getwd()
@@ -61,11 +99,20 @@ func runRun(cmd *cobra.Command, args []string) error {
 		Time:    time.Now(),
 	}
 
+	if parsedResult != nil {
+		meta.Tool = parsedResult.Tool
+		meta.FindingsCount = len(parsedResult.Findings)
+	}
+
 	result, err := capture.WriteNote(c.VaultPath, body, meta)
 	if err != nil {
 		return fmt.Errorf("write note: %w", err)
 	}
 
-	fmt.Println(capture.Confirmation(result.RelPath, boxCtx))
+	ctx := capture.Confirmation(result.RelPath, boxCtx)
+	if parsedResult != nil && len(parsedResult.Findings) > 0 {
+		ctx += fmt.Sprintf(" (%d findings parsed)", len(parsedResult.Findings))
+	}
+	fmt.Println(ctx)
 	return nil
 }

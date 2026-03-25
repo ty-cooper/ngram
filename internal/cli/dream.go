@@ -37,6 +37,9 @@ Use --dry-run to see what would change without modifying anything.`,
 		if err != nil {
 			return fmt.Errorf("connect to meilisearch: %w", err)
 		}
+		if !searchClient.Healthy() {
+			return fmt.Errorf("meilisearch is not running — start it with 'n up' first")
+		}
 		if embCfg := buildEmbedderConfig(cfg); embCfg.Source != "" {
 			if err := searchClient.ConfigureEmbedder(embCfg); err != nil {
 				log.Printf("dream: embedder config failed: %v (using keyword search)", err)

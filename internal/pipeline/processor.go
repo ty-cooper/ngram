@@ -53,7 +53,8 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 	rawContent := string(raw)
 
 	// Parse inbox frontmatter to get source metadata.
-	source, box, phase := parseInboxMeta(rawContent)
+	meta := parseInboxMetaFull(rawContent)
+	source, box, phase := meta.Source, meta.Box, meta.Phase
 	body := stripFrontmatter(rawContent)
 
 	// 3. If MODEL=off, write raw directly.
@@ -101,6 +102,19 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 			Box:            box,
 			Phase:          phase,
 			Created:        time.Now().UTC(),
+			Evidence: EvidenceChain{
+				SourceCommand: meta.Command,
+				CapturedAt:    meta.Captured,
+				Tool:          meta.Tool,
+				SourceFile:    filepath.Base(inboxPath),
+				SessionID:     meta.Session,
+			},
+		}
+
+		// Cross-engagement recall.
+		if recalls := p.recallPass(processed); len(recalls) > 0 {
+			log.Printf("ngram: recall — %d related notes from other engagements", len(recalls))
+			appendRecallSection(processed, recalls)
 		}
 
 		dir, filename := Route(processed)
@@ -123,17 +137,20 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 
 		if p.SearchClient != nil {
 			doc := search.NoteDocument{
-				ID:          processed.ID,
-				Title:       processed.Title,
-				Body:        processed.Body,
-				Summary:     processed.Summary,
-				Tags:        processed.Tags,
-				Domain:      processed.Domain,
-				ContentType: processed.ContentType,
-				Box:         processed.Box,
-				Phase:       processed.Phase,
-				FilePath:    relPath,
-				Captured:    processed.Created.Unix(),
+				ID:            processed.ID,
+				Title:         processed.Title,
+				Body:          processed.Body,
+				Summary:       processed.Summary,
+				Tags:          processed.Tags,
+				Domain:        processed.Domain,
+				ContentType:   processed.ContentType,
+				Box:           processed.Box,
+				Phase:         processed.Phase,
+				FilePath:      relPath,
+				SourceCommand: processed.Evidence.SourceCommand,
+				Tool:          processed.Evidence.Tool,
+				SessionID:     processed.Evidence.SessionID,
+				Captured:      processed.Created.Unix(),
 			}
 			if err := p.SearchClient.IndexNote(doc); err != nil {
 				log.Printf("warn: index failed for %s: %v", processed.ID, err)
@@ -241,6 +258,11 @@ func (p *Processor) processBundle(ctx context.Context, inboxPath string, start t
 		Box:            bundle.Box,
 		Phase:          bundle.Phase,
 		Created:        time.Now().UTC(),
+		Evidence: EvidenceChain{
+			CapturedAt: time.Now().UTC().Format(time.RFC3339),
+			SessionID:  bundle.SessionID,
+			SourceFile: filepath.Base(inboxPath),
+		},
 	}
 
 	// Route and write note.
@@ -263,6 +285,7 @@ func (p *Processor) processBundle(ctx context.Context, inboxPath string, start t
 		}
 	}
 	if len(screenshots) > 0 {
+		processed.Evidence.Screenshots = screenshots
 		var embeds strings.Builder
 		embeds.WriteString("\n\n## Screenshots\n\n")
 		for _, ss := range screenshots {
@@ -475,16 +498,33 @@ func atomicWrite(path, content string) error {
 	return nil
 }
 
+// InboxMeta holds all metadata parsed from an inbox note's frontmatter.
+type InboxMeta struct {
+	Source    string
+	Box      string
+	Phase    string
+	Command  string
+	Tool     string
+	Captured string
+	Session  string
+}
+
 // parseInboxMeta extracts source, box, and phase from inbox YAML frontmatter.
 func parseInboxMeta(content string) (source, box, phase string) {
-	source = "terminal"
+	meta := parseInboxMetaFull(content)
+	return meta.Source, meta.Box, meta.Phase
+}
+
+// parseInboxMetaFull extracts all metadata from inbox YAML frontmatter.
+func parseInboxMetaFull(content string) InboxMeta {
+	meta := InboxMeta{Source: "terminal"}
 	lines := strings.Split(content, "\n")
 	inFM := false
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "---" {
 			if inFM {
-				return
+				return meta
 			}
 			inFM = true
 			continue
@@ -495,15 +535,23 @@ func parseInboxMeta(content string) (source, box, phase string) {
 		if k, v, ok := parseYAMLLine(trimmed); ok {
 			switch k {
 			case "source":
-				source = v
+				meta.Source = v
 			case "box":
-				box = v
+				meta.Box = v
 			case "phase":
-				phase = v
+				meta.Phase = v
+			case "command":
+				meta.Command = v
+			case "tool":
+				meta.Tool = v
+			case "captured":
+				meta.Captured = v
+			case "session_id":
+				meta.Session = v
 			}
 		}
 	}
-	return
+	return meta
 }
 
 func parseYAMLLine(line string) (key, value string, ok bool) {

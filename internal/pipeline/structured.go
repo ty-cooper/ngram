@@ -20,14 +20,26 @@ type StructuredNote struct {
 	Tags         []string `json:"tags"`
 }
 
+// EvidenceChain tracks provenance for a note.
+type EvidenceChain struct {
+	SourceCommand string
+	CapturedAt    string
+	SessionID     string
+	ParentNoteID  string
+	Screenshots   []string
+	SourceFile    string
+	Tool          string
+}
+
 // ProcessedNote is the fully resolved note ready for writing.
 type ProcessedNote struct {
 	StructuredNote
-	ID      string
-	Source  string
-	Box     string
-	Phase   string
-	Created time.Time
+	ID       string
+	Source   string
+	Box      string
+	Phase    string
+	Created  time.Time
+	Evidence EvidenceChain
 }
 
 // GenerateID returns a random 8-char hex string.
@@ -132,6 +144,35 @@ func BuildFrontmatter(n *ProcessedNote) string {
 	}
 	if n.Phase != "" {
 		fmt.Fprintf(&b, "phase: %s\n", n.Phase)
+	}
+
+	// Evidence chain.
+	if n.Evidence.SourceCommand != "" || n.Evidence.Tool != "" || n.Evidence.SessionID != "" {
+		b.WriteString("evidence:\n")
+		if n.Evidence.SourceCommand != "" {
+			fmt.Fprintf(&b, "  command: %q\n", n.Evidence.SourceCommand)
+		}
+		if n.Evidence.CapturedAt != "" {
+			fmt.Fprintf(&b, "  captured: %q\n", n.Evidence.CapturedAt)
+		}
+		if n.Evidence.Tool != "" {
+			fmt.Fprintf(&b, "  tool: %q\n", n.Evidence.Tool)
+		}
+		if n.Evidence.SourceFile != "" {
+			fmt.Fprintf(&b, "  source_file: %q\n", n.Evidence.SourceFile)
+		}
+		if n.Evidence.SessionID != "" {
+			fmt.Fprintf(&b, "  session_id: %q\n", n.Evidence.SessionID)
+		}
+		if n.Evidence.ParentNoteID != "" {
+			fmt.Fprintf(&b, "  parent_note_id: %q\n", n.Evidence.ParentNoteID)
+		}
+		if len(n.Evidence.Screenshots) > 0 {
+			b.WriteString("  screenshots:\n")
+			for _, ss := range n.Evidence.Screenshots {
+				fmt.Fprintf(&b, "    - %s\n", ss)
+			}
+		}
 	}
 
 	// Retention for quizzable notes.

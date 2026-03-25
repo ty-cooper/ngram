@@ -15,12 +15,19 @@ import (
 )
 
 var newCmd = &cobra.Command{
-	Use:   "new",
-	Short: "Open $EDITOR for multi-line note capture",
-	RunE:  newRun,
+	Use:     "new [text...]",
+	Aliases: []string{"n"},
+	Short:   "Create a new note (inline text or $EDITOR)",
+	Args:    cobra.ArbitraryArgs,
+	RunE:    newRun,
 }
 
 func newRun(cmd *cobra.Command, args []string) error {
+	// Inline text: n new some note text
+	if len(args) > 0 {
+		return rootRun(cmd, args)
+	}
+
 	c, err := loadConfig()
 	if err != nil {
 		return err

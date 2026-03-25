@@ -74,6 +74,9 @@ func (c *Client) EnsureIndex() error {
 		"streak",
 		"created",
 		"modified",
+		"source_command",
+		"tool",
+		"session_id",
 	}
 	task, err = c.index.UpdateFilterableAttributes(&filterAttrs)
 	if err != nil {
@@ -108,7 +111,7 @@ func (c *Client) ConfigureEmbedder(cfg EmbedderConfig) error {
 		Source: meilisearch.EmbedderSource(cfg.Source),
 		Model:  cfg.Model,
 		DocumentTemplate: "A {{doc.content_type}} note titled {{doc.title}}. " +
-			"Tags: {{doc.tags}}. {{doc.summary}} {{doc.body}}",
+			"{{doc.summary}} {{doc.body}}",
 		DocumentTemplateMaxBytes: 2000,
 	}
 	if cfg.APIKey != "" {
@@ -238,13 +241,15 @@ func (c *Client) Search(query string, opts SearchOptions) (*SearchResponse, erro
 
 // SimilarNote is a search hit with a ranking score for dedup comparison.
 type SimilarNote struct {
-	ID          string
-	Title       string
-	Body        string
-	Summary     string
-	Domain      string
-	FilePath    string
-	Score       float64
+	ID         string
+	Title      string
+	Body       string
+	Summary    string
+	Domain     string
+	Box        string
+	Engagement string
+	FilePath   string
+	Score      float64
 }
 
 // FindSimilar returns the top N most similar notes to the given query text.
@@ -283,6 +288,52 @@ func (c *Client) FindSimilar(query string, limit int64) ([]SimilarNote, error) {
 			Domain:   hitStr(hit, "domain"),
 			FilePath: hitStr(hit, "file_path"),
 			Score:    score,
+		})
+	}
+
+	return results, nil
+}
+
+// FindSimilarFiltered returns similar notes with a Meilisearch filter applied.
+// Use filter like `box != "current-box"` for cross-engagement recall.
+func (c *Client) FindSimilarFiltered(query string, limit int64, filter string) ([]SimilarNote, error) {
+	if limit == 0 {
+		limit = 5
+	}
+
+	req := &meilisearch.SearchRequest{
+		Limit:                limit,
+		ShowRankingScore:     true,
+		AttributesToRetrieve: []string{"id", "title", "body", "summary", "domain", "box", "engagement", "file_path"},
+	}
+	if filter != "" {
+		req.Filter = filter
+	}
+	if c.hybridEnabled {
+		req.Hybrid = &meilisearch.SearchRequestHybrid{
+			SemanticRatio: 0.7,
+			Embedder:      "default",
+		}
+	}
+
+	resp, err := c.index.Search(query, req)
+	if err != nil {
+		return nil, fmt.Errorf("find similar filtered: %w", err)
+	}
+
+	results := make([]SimilarNote, 0, len(resp.Hits))
+	for _, hit := range resp.Hits {
+		score := hitFloat(hit, "_rankingScore")
+		results = append(results, SimilarNote{
+			ID:         hitStr(hit, "id"),
+			Title:      hitStr(hit, "title"),
+			Body:       hitStr(hit, "body"),
+			Summary:    hitStr(hit, "summary"),
+			Domain:     hitStr(hit, "domain"),
+			Box:        hitStr(hit, "box"),
+			Engagement: hitStr(hit, "engagement"),
+			FilePath:   hitStr(hit, "file_path"),
+			Score:      score,
 		})
 	}
 
