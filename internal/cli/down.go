@@ -41,12 +41,21 @@ func downRun(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("✓ sent SIGTERM to PID %d\n", hb.PID)
 
-	// If --force, wait 5s then SIGKILL.
-	if downForce {
-		time.Sleep(5 * time.Second)
-		if running, _ := daemon.IsRunning(c.VaultPath); running {
-			fmt.Printf("  daemon still running, sending SIGKILL...\n")
+	// Wait for process to exit (up to 10s).
+	for i := 0; i < 20; i++ {
+		if err := syscall.Kill(hb.PID, 0); err != nil {
+			break // Process is gone.
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// Check if still alive.
+	if err := syscall.Kill(hb.PID, 0); err == nil {
+		if downForce {
+			fmt.Println("  daemon still running, sending SIGKILL...")
 			syscall.Kill(hb.PID, syscall.SIGKILL)
+		} else {
+			fmt.Println("  warn: daemon still running after SIGTERM. Use --force to SIGKILL.")
 		}
 	}
 
