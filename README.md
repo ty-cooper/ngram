@@ -28,31 +28,28 @@ make install        # installs to $GOPATH/bin/n
 ## Setup
 
 ```bash
-# 1. Set your Anthropic API key
-export ANTHROPIC_API_KEY="sk-ant-..."  # add to your shell profile
+# One command — prompts for vault path, writes config, initializes, optionally installs as service
+export ANTHROPIC_API_KEY="sk-ant-..."  # add to ~/.zshrc
+n setup
+```
 
-# 2. Create config
+Or manually:
+
+```bash
 cat > ~/.ngram.yml << 'EOF'
-vault_path: ~/path/to/your/vault
+vault_path: ~/.obsidian.ngram
 model: cloud
-imessage:
-  phone: "+1XXXXXXXXXX"
-schedule:
-  wake_hour: 8
-  sleep_hour: 22
 EOF
 
-# 3. Initialize vault structure
 n init
-
-# 4. Start services (Meilisearch + processor daemon)
 n up
+n up --install   # auto-start on boot
+```
 
-# 5. Verify everything is running
-n status
+Verify everything:
 
-# 6. Install as system service (survives reboot)
-n up --install
+```bash
+n doctor
 ```
 
 Open the vault path in Obsidian as a vault.
@@ -105,11 +102,11 @@ n -t "nmap results" open ports on 445, 139, 80
 # Open $EDITOR (vim) to write a full note
 n new
 
+# Alias
+n n
+
 # Pipe command output
 nmap -sV 10.10.10.8 | n -t "nmap-optimum"
-
-# Run and capture (command string + output)
-n run nmap -sV 10.10.10.8
 
 # Engagement scaffolding
 n box optimum 10.10.10.8 --os=windows
@@ -191,8 +188,7 @@ crontab -e
 CAPTURE
   n <text>                    instant note
   n -t "title" <text>         note with title
-  n new                       open $EDITOR to write a note
-  n run <command>             execute + capture (via /bin/sh -c)
+  n new (alias: n n)          open $EDITOR to write a note
   command | n -t "title"      pipe to note
   n amend <text>              append to last captured note
   n edit                      open last note in $EDITOR
@@ -219,16 +215,23 @@ RETENTION
   n verify                     check hash chain integrity
 
 SYSTEM
+  n setup                      one-command interactive setup
   n init                       initialize vault structure
   n up                         start services (Meilisearch + daemon)
   n down                       stop all services
+  n down --force               SIGKILL after 5s if daemon is hung
   n status                     health check + processing backlog
+  n doctor                     full system diagnostics
   n up --install               install as system service
   n up --uninstall             remove system service
   n dream                      nightly knowledge consolidation (creates PR)
   n dream --dry-run            preview changes without modifying
   n migrate --source <dir>     batch import existing vault
   n report <box>               generate engagement report
+  n report <box> --format docx generate DOCX report
+  n evidence <note-id>         show provenance chain for a note
+  n recall <query>             cross-engagement knowledge search
+  n dash [box]                 live engagement dashboard (TUI)
 ```
 
 ## iMessage Commands
@@ -270,14 +273,24 @@ Two repos: `ngram` (tool source) and vault (private data, connected via `~/.ngra
 
 - **Go** single binary, all backend code
 - **Cobra + Viper** CLI and config
-- **Bubbletea + Lipgloss** terminal UI (quiz TUI)
-- **Meilisearch** (Docker) hybrid search with embeddings
-- **Anthropic API** (`claude-sonnet-4-20250514`) for AI structuring with JSON prefill
+- **Bubbletea + Lipgloss** terminal UI (quiz, dashboard)
+- **Meilisearch** (Docker) hybrid search with semantic embeddings
+- **Anthropic API** (`claude-sonnet-4-6`) for AI structuring via instructor-go
+- **LangSmith** (optional) LLM call tracing via [langsmith-go](https://github.com/ty-cooper/langsmith-go)
 - **SwiftUI** capture overlay (macOS menu bar app)
 - **TypeScript** Obsidian search plugin
 - **fsnotify** file watching with 500ms debounce
 - **go-sqlite3** iMessage chat.db polling
 - **Git** auto-commit on every vault change
+
+### Optional Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `ANTHROPIC_API_KEY` | Required. AI structuring and all LLM features |
+| `OPENAI_API_KEY` | Hybrid search embeddings (semantic + keyword) |
+| `LANGCHAIN_API_KEY` | LangSmith tracing for LLM observability |
+| `GH_TOKEN` | Dream cycle PR creation on private vault repos |
 
 ## License
 
