@@ -90,7 +90,7 @@ func (d *Deduplicator) Check(ctx context.Context, note *StructuredNote, procPath
 		}
 
 	case "append":
-		if err := d.handleAppend(note, decision); err != nil {
+		if err := d.handleAppend(ctx, note, decision); err != nil {
 			log.Printf("warn: append failed: %v, defaulting to NEW", err)
 			return &DedupResult{Action: "proceed", Reason: "append failed"}
 		}
@@ -176,7 +176,13 @@ func (d *Deduplicator) handleDuplicate(note *StructuredNote, decision *DedupDeci
 	log.Printf("ngram: duplicate of %s — %s", decision.TargetNoteID, decision.Reason)
 }
 
-func (d *Deduplicator) handleAppend(note *StructuredNote, decision *DedupDecision) error {
+// MergedNote is the LLM's rewritten note body.
+type MergedNote struct {
+	Body    string `json:"body" jsonschema:"description=Complete rewritten note body in markdown,required=true"`
+	Summary string `json:"summary" jsonschema:"description=Updated summary under 120 chars,required=true"`
+}
+
+func (d *Deduplicator) handleAppend(ctx context.Context, note *StructuredNote, decision *DedupDecision) error {
 	if decision.TargetNoteID == "" {
 		return fmt.Errorf("no target note ID for append")
 	}
@@ -197,25 +203,58 @@ func (d *Deduplicator) handleAppend(note *StructuredNote, decision *DedupDecisio
 		return fmt.Errorf("read target: %w", err)
 	}
 
-	content := string(existing)
-	appendText := decision.AppendContent
-	if appendText == "" {
-		appendText = note.Body
+	existingContent := string(existing)
+	existingBody := stripFrontmatter(existingContent)
+
+	newContent := decision.AppendContent
+	if newContent == "" {
+		newContent = note.Body
 	}
 
-	// Append new content before any Links section.
-	if idx := strings.Index(content, "\n## Links"); idx >= 0 {
-		content = content[:idx] + "\n\n" + appendText + content[idx:]
+	// Ask LLM to intelligently merge the new content into the existing note.
+	mergePrompt := fmt.Sprintf(`You are merging new information into an existing knowledge note.
+
+EXISTING NOTE:
+%s
+
+NEW INFORMATION TO INTEGRATE:
+%s
+
+RULES:
+- Integrate the new information naturally into the existing note
+- Place it where it fits best contextually, not just at the end
+- Preserve all existing information — do not remove anything
+- Maintain the existing structure (headings, lists, code blocks)
+- Keep the note atomic — one concept. If the new info doesn't fit, still include it in the most logical spot
+- Google developer docs style: declarative, present tense, no filler
+- Return the COMPLETE rewritten note body (everything after the frontmatter)`, existingBody, newContent)
+
+	var merged MergedNote
+	if err := d.Runner.Instruct(ctx, mergePrompt, &merged); err != nil {
+		// Fallback: dumb append at end.
+		log.Printf("warn: smart merge failed: %v, falling back to append", err)
+		if idx := strings.Index(existingContent, "\n## Links"); idx >= 0 {
+			existingContent = existingContent[:idx] + "\n\n" + newContent + existingContent[idx:]
+		} else {
+			existingContent = strings.TrimRight(existingContent, "\n") + "\n\n" + newContent + "\n"
+		}
 	} else {
-		content = strings.TrimRight(content, "\n") + "\n\n" + appendText + "\n"
+		// Replace body in existing content (preserve frontmatter).
+		if idx := strings.Index(existingContent[4:], "\n---\n"); idx >= 0 {
+			fm := existingContent[:idx+4+5]
+			existingContent = fm + "\n" + merged.Body + "\n"
+		}
 	}
 
-	// Update modified timestamp in frontmatter.
-	content = updateModifiedTimestamp(content)
+	// Update modified timestamp and summary in frontmatter.
+	existingContent = updateModifiedTimestamp(existingContent)
+	if merged.Summary != "" {
+		existingContent = updateFrontmatterField(existingContent, "summary", merged.Summary)
+	}
 
 	// Write back atomically.
-	if err := atomicWrite(targetPath, content); err != nil {
-		return fmt.Errorf("write appended: %w", err)
+	if err := atomicWrite(targetPath, existingContent); err != nil {
+		return fmt.Errorf("write merged: %w", err)
 	}
 
 	// Re-index the updated note.
@@ -226,8 +265,20 @@ func (d *Deduplicator) handleAppend(note *StructuredNote, decision *DedupDecisio
 		}
 	}
 
-	log.Printf("ngram: appended to %s — %s", decision.TargetNoteID, decision.Reason)
+	log.Printf("ngram: merged into %s — %s", decision.TargetNoteID, decision.Reason)
 	return nil
+}
+
+func updateFrontmatterField(content, field, value string) string {
+	lines := strings.Split(content, "\n")
+	prefix := field + ":"
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), prefix) {
+			lines[i] = fmt.Sprintf("%s %q", field, value)
+			break
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (d *Deduplicator) findNoteByID(id string) (string, error) {
