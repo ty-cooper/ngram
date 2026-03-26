@@ -41,6 +41,7 @@ type Heartbeat struct {
 type Daemon struct {
 	VaultPath  string
 	Services   []Service
+	OnShutdown []func() // Cleanup hooks run on graceful shutdown.
 	mu         sync.Mutex
 	statuses   map[string]string
 	engaged    bool
@@ -128,6 +129,11 @@ func (d *Daemon) Run(ctx context.Context) error {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		log.Printf("warn: shutdown timeout, some goroutines may not have finished")
+	}
+
+	// Run shutdown hooks.
+	for _, fn := range d.OnShutdown {
+		fn()
 	}
 
 	// Remove heartbeat file.

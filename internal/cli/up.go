@@ -127,6 +127,7 @@ func upRun(cmd *cobra.Command, args []string) error {
 	d.Services = []daemon.Service{
 		{Name: "processor", Run: watcher.Start},
 	}
+	d.OnShutdown = append(d.OnShutdown, runner.Close)
 
 	fmt.Println("✓ ngram daemon starting")
 

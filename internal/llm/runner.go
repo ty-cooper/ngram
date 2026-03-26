@@ -15,6 +15,7 @@ import (
 
 	"github.com/567-labs/instructor-go/pkg/instructor"
 	anthropic "github.com/liushuangls/go-anthropic/v2"
+	langsmith "github.com/ty-cooper/langsmith-go"
 )
 
 var (
@@ -40,12 +41,14 @@ type Runner struct {
 	VaultPath    string
 	MockResponse []byte // For testing: if set, returns this instead of calling API.
 	LastUsage    Usage  // Token counts from last API call.
+	Tracer       *langsmith.Client // Optional LangSmith tracing — nil = no-op.
 	instructor   *instructor.InstructorAnthropic
 	rawClient    *anthropic.Client
 	hasClient    bool
 }
 
 // NewRunner creates a Runner. For cloud mode, ANTHROPIC_API_KEY must be set.
+// If LANGCHAIN_API_KEY is set, LangSmith tracing is enabled automatically.
 func NewRunner(model, vaultPath string) *Runner {
 	r := &Runner{
 		Model:     model,
@@ -65,7 +68,22 @@ func NewRunner(model, vaultPath string) *Runner {
 		)
 		r.hasClient = true
 	}
+
+	// Initialize LangSmith tracing if API key is available.
+	if lsClient, err := langsmith.NewClient(
+		langsmith.WithProject("ngram"),
+	); err == nil {
+		r.Tracer = lsClient
+	}
+
 	return r
+}
+
+// Close shuts down the runner, flushing any pending LangSmith traces.
+func (r *Runner) Close() {
+	if r.Tracer != nil {
+		r.Tracer.Close()
+	}
 }
 
 // NewMockRunner creates a Runner that returns a fixed response for testing.
@@ -133,9 +151,36 @@ func (r *Runner) Instruct(ctx context.Context, prompt string, result any, opts .
 		req.System = cfg.systemPrompt
 	}
 
+	// Trace the call if LangSmith is enabled.
+	var rt *langsmith.RunTree
+	if r.Tracer != nil {
+		parent := langsmith.RunTreeFromContext(ctx)
+		if parent != nil {
+			rt = parent.CreateChild("instruct", langsmith.RunTypeLLM,
+				langsmith.WithRunTreeClient(r.Tracer),
+			)
+		} else {
+			rt = langsmith.NewRunTree("instruct", langsmith.RunTypeLLM,
+				langsmith.WithRunTreeClient(r.Tracer),
+			)
+		}
+		rt.SetInputs(map[string]any{
+			"model":  defaultModel,
+			"prompt": truncateForTrace(prompt),
+		})
+		rt.PostRun()
+	}
+
 	_, err := r.instructor.CreateMessages(ctx, req, result)
 	if err != nil {
+		if rt != nil {
+			rt.End(langsmith.WithEndError(err.Error()))
+		}
 		return fmt.Errorf("instructor: %w", err)
+	}
+
+	if rt != nil {
+		rt.End(langsmith.WithEndOutputs(map[string]any{"result": "ok"}))
 	}
 	return nil
 }
@@ -176,8 +221,31 @@ func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]b
 		req.System = cfg.systemPrompt
 	}
 
+	// Trace the call if LangSmith is enabled.
+	var rt *langsmith.RunTree
+	if r.Tracer != nil {
+		parent := langsmith.RunTreeFromContext(ctx)
+		if parent != nil {
+			rt = parent.CreateChild("run", langsmith.RunTypeLLM,
+				langsmith.WithRunTreeClient(r.Tracer),
+			)
+		} else {
+			rt = langsmith.NewRunTree("run", langsmith.RunTypeLLM,
+				langsmith.WithRunTreeClient(r.Tracer),
+			)
+		}
+		rt.SetInputs(map[string]any{
+			"model":  defaultModel,
+			"prompt": truncateForTrace(prompt),
+		})
+		rt.PostRun()
+	}
+
 	resp, err := r.rawClient.CreateMessages(ctx, req)
 	if err != nil {
+		if rt != nil {
+			rt.End(langsmith.WithEndError(err.Error()))
+		}
 		return nil, fmt.Errorf("anthropic api: %w", err)
 	}
 
@@ -196,7 +264,18 @@ func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]b
 
 	text := strings.TrimSpace(result.String())
 	if text == "" {
+		if rt != nil {
+			rt.End(langsmith.WithEndError("empty response"))
+		}
 		return nil, fmt.Errorf("anthropic api: empty response (stop_reason: %s)", resp.StopReason)
+	}
+
+	if rt != nil {
+		rt.End(langsmith.WithEndOutputs(map[string]any{
+			"output":        truncateForTrace(text),
+			"input_tokens":  resp.Usage.InputTokens,
+			"output_tokens": resp.Usage.OutputTokens,
+		}))
 	}
 	return []byte(text), nil
 }
@@ -303,6 +382,14 @@ var execCommand = newExecCommand
 
 func newExecCommand(name string, args ...string) *exec.Cmd {
 	return exec.Command(name, args...)
+}
+
+// truncateForTrace limits prompt/output size in trace payloads.
+func truncateForTrace(s string) string {
+	if len(s) > 2000 {
+		return s[:2000] + "...(truncated)"
+	}
+	return s
 }
 
 // CheckAuth verifies the API key is set and valid.
