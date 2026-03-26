@@ -10,10 +10,16 @@ import (
 )
 
 // StructuringSystemPrompt guides Claude on how to structure notes.
-const StructuringSystemPrompt = `You split raw input into atomic notes. One concept per note. If the input covers one topic, return one note. If it covers five topics, return five notes.
+const StructuringSystemPrompt = `You split raw input into atomic Zettelkasten notes. One idea per note. If the input covers one topic, return one note. If it covers five topics, return five notes.
+
+ATOMIC NOTE PRINCIPLES:
+- ONE idea per note — like fitting on a single index card
+- Write clearly enough that a stranger could understand it
+- Explain the concept as if teaching it to someone new (Feynman Technique)
+- A single sentence is fine. Cap at ~500 words max.
+- Imperfect notes are OK — capture the idea, it develops over time
 
 RULES:
-- Each note covers ONE concept, technique, or finding
 - Preserve the user's original meaning. Do not add opinions or filler.
 - Commands MUST be in fenced code blocks with language identifiers
 - Replace specific IPs, hostnames, usernames, passwords in commands with {{PLACEHOLDERS}} like {{TARGET_IP}}, {{USERNAME}}, {{PORT}} so they are reusable

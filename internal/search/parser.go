@@ -13,17 +13,18 @@ import (
 
 // noteFrontmatter represents the YAML frontmatter of a structured vault note.
 type noteFrontmatter struct {
-	Title       string   `yaml:"title"`
-	Summary     string   `yaml:"summary"`
-	Domain      string   `yaml:"domain"`
-	TopicCluster string  `yaml:"topic_cluster"`
-	ContentType string   `yaml:"content_type"`
-	Tags        []string `yaml:"tags"`
-	Box         string   `yaml:"box"`
-	Phase       string   `yaml:"phase"`
-	Engagement  string   `yaml:"engagement"`
-	Captured    string   `yaml:"captured"`
-	ID          string   `yaml:"id"`
+	Title        string   `yaml:"title"`
+	Summary      string   `yaml:"summary"`
+	Domain       string   `yaml:"domain"`
+	TopicCluster string   `yaml:"topic_cluster"`
+	ContentType  string   `yaml:"content_type"`
+	Tags         []string `yaml:"tags"`
+	Box          string   `yaml:"box"`
+	Phase        string   `yaml:"phase"`
+	Engagement   string   `yaml:"engagement"`
+	Captured     string   `yaml:"captured"`
+	Created      string   `yaml:"created"`
+	ID           string   `yaml:"id"`
 }
 
 // ParseNoteFile reads a markdown file and returns a NoteDocument for indexing.
@@ -71,18 +72,90 @@ func ParseNoteFile(path, vaultPath string) (*NoteDocument, error) {
 		}
 	}
 
-	body := strings.TrimSpace(strings.Join(bodyLines, "\n"))
+	fullBody := strings.TrimSpace(strings.Join(bodyLines, "\n"))
+
+	// Parse footer metadata (after last ---).
+	// New format: content above ---, metadata key: value lines below.
+	body := fullBody
+	if lastSep := strings.LastIndex(fullBody, "\n---\n"); lastSep >= 0 {
+		body = strings.TrimSpace(fullBody[:lastSep])
+		footer := fullBody[lastSep+5:]
+		for _, line := range strings.Split(footer, "\n") {
+			line = strings.TrimSpace(line)
+			if k, v, ok := strings.Cut(line, ": "); ok {
+				switch k {
+				case "id":
+					if fm.ID == "" {
+						fm.ID = v
+					}
+				case "type":
+					if fm.ContentType == "" {
+						fm.ContentType = v
+					}
+				case "domain":
+					if fm.Domain == "" {
+						fm.Domain = v
+					}
+				case "topic_cluster":
+					if fm.TopicCluster == "" {
+						fm.TopicCluster = v
+					}
+				case "box":
+					if fm.Box == "" {
+						fm.Box = v
+					}
+				case "phase":
+					if fm.Phase == "" {
+						fm.Phase = v
+					}
+				case "tags":
+					if len(fm.Tags) == 0 {
+						for _, t := range strings.Fields(v) {
+							fm.Tags = append(fm.Tags, strings.TrimPrefix(t, "#"))
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Extract title from H1 if not in frontmatter.
+	if fm.Title == "" {
+		for _, line := range strings.Split(body, "\n") {
+			if strings.HasPrefix(line, "# ") {
+				fm.Title = strings.TrimPrefix(line, "# ")
+				break
+			}
+		}
+	}
+
+	// Extract summary from italic line after H1.
+	if fm.Summary == "" {
+		lines := strings.Split(body, "\n")
+		for i, line := range lines {
+			if strings.HasPrefix(line, "# ") && i+2 < len(lines) {
+				next := strings.TrimSpace(lines[i+2])
+				if strings.HasPrefix(next, "*") && strings.HasSuffix(next, "*") && !strings.HasPrefix(next, "**") {
+					fm.Summary = strings.Trim(next, "*")
+				}
+				break
+			}
+		}
+	}
 
 	relPath, _ := filepath.Rel(vaultPath, path)
 
 	id := fm.ID
 	if id == "" {
-		// Fall back to filename without extension as ID.
 		id = strings.TrimSuffix(filepath.Base(path), ".md")
 	}
 
 	var captured int64
-	if fm.Captured != "" {
+	if fm.Created != "" {
+		if t, err := time.Parse(time.RFC3339, fm.Created); err == nil {
+			captured = t.Unix()
+		}
+	} else if fm.Captured != "" {
 		if t, err := time.Parse(time.RFC3339, fm.Captured); err == nil {
 			captured = t.Unix()
 		}

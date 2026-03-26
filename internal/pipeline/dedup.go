@@ -211,6 +211,14 @@ func (d *Deduplicator) handleAppend(ctx context.Context, note *StructuredNote, d
 		newContent = note.Body
 	}
 
+	// Check if merge would exceed 500 words — if so, keep as new note instead.
+	existingWords := len(strings.Fields(existingBody))
+	newWords := len(strings.Fields(newContent))
+	if existingWords+newWords > 500 {
+		log.Printf("ngram: merge would exceed 500 words (%d + %d), keeping as new note", existingWords, newWords)
+		return fmt.Errorf("merge exceeds 500 word limit")
+	}
+
 	// Ask LLM to intelligently merge the new content into the existing note.
 	mergePrompt := fmt.Sprintf(`You are merging new information into an existing knowledge note.
 

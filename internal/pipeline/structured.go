@@ -47,6 +47,14 @@ type ProcessedNote struct {
 	Phase    string
 	Created  time.Time
 	Evidence EvidenceChain
+	Related  []RelatedLink // Bidirectional links to other notes
+	From     string        // Parent note ID (lineage tracking)
+}
+
+// RelatedLink is a connection to another note.
+type RelatedLink struct {
+	ID    string
+	Title string
 }
 
 // GenerateID returns a random 8-char hex string.
@@ -150,78 +158,26 @@ func deriveTitle(body string) string {
 	return line
 }
 
-// BuildFrontmatter generates Zettelkasten YAML frontmatter.
+// BuildFrontmatter generates minimal top frontmatter (timestamps only — for pipeline).
 func BuildFrontmatter(n *ProcessedNote) string {
 	var b strings.Builder
 	b.WriteString("---\n")
 	fmt.Fprintf(&b, "id: %s\n", n.ID)
-	fmt.Fprintf(&b, "title: %q\n", n.Title)
 	fmt.Fprintf(&b, "created: %s\n", n.Created.UTC().Format(time.RFC3339))
-	fmt.Fprintf(&b, "type: %s\n", n.ContentType)
-
-	if len(n.Tags) > 0 {
-		b.WriteString("tags:\n")
-		for _, tag := range n.Tags {
-			fmt.Fprintf(&b, "  - %s\n", tag)
-		}
-	}
-
-	if n.Box != "" {
-		fmt.Fprintf(&b, "box: %s\n", n.Box)
-	}
-	if n.Phase != "" {
-		fmt.Fprintf(&b, "phase: %s\n", n.Phase)
-	}
-
-	// Evidence chain.
-	if n.Evidence.SourceCommand != "" || n.Evidence.Tool != "" || n.Evidence.SessionID != "" {
-		b.WriteString("evidence:\n")
-		if n.Evidence.SourceCommand != "" {
-			fmt.Fprintf(&b, "  command: %q\n", n.Evidence.SourceCommand)
-		}
-		if n.Evidence.CapturedAt != "" {
-			fmt.Fprintf(&b, "  captured: %q\n", n.Evidence.CapturedAt)
-		}
-		if n.Evidence.Tool != "" {
-			fmt.Fprintf(&b, "  tool: %q\n", n.Evidence.Tool)
-		}
-		if n.Evidence.SourceFile != "" {
-			fmt.Fprintf(&b, "  source_file: %q\n", n.Evidence.SourceFile)
-		}
-		if n.Evidence.SessionID != "" {
-			fmt.Fprintf(&b, "  session_id: %q\n", n.Evidence.SessionID)
-		}
-		if n.Evidence.ParentNoteID != "" {
-			fmt.Fprintf(&b, "  parent_note_id: %q\n", n.Evidence.ParentNoteID)
-		}
-		if len(n.Evidence.Screenshots) > 0 {
-			b.WriteString("  screenshots:\n")
-			for _, ss := range n.Evidence.Screenshots {
-				fmt.Fprintf(&b, "    - %s\n", ss)
-			}
-		}
-	}
-
-	// Retention for quizzable notes.
-	if n.ContentType == "knowledge" {
-		b.WriteString("retention:\n")
-		b.WriteString("  state: new\n")
-		b.WriteString("  ease_factor: 2.5\n")
-		b.WriteString("  interval_days: 0\n")
-		fmt.Fprintf(&b, "  next_review: %s\n", n.Created.Format("2006-01-02"))
-	}
-
+	fmt.Fprintf(&b, "modified: %s\n", n.Created.UTC().Format(time.RFC3339))
 	b.WriteString("---\n")
 	return b.String()
 }
 
-// BuildNoteContent returns Zettelkasten markdown: frontmatter + title + summary + body + tags.
+// BuildNoteContent returns Zettelkasten markdown: minimal frontmatter, content first, metadata footer.
 func BuildNoteContent(n *ProcessedNote) string {
 	var b strings.Builder
+
+	// --- Minimal frontmatter (machine-readable) ---
 	b.WriteString(BuildFrontmatter(n))
 	b.WriteString("\n")
 
-	// Title as H1.
+	// --- Content (the idea) ---
 	fmt.Fprintf(&b, "# %s\n\n", n.Title)
 
 	if n.Summary != "" {
@@ -231,14 +187,66 @@ func BuildNoteContent(n *ProcessedNote) string {
 	b.WriteString(n.Body)
 	b.WriteString("\n")
 
-	// Tags and links below page break.
-	b.WriteString("\n---\n\n")
+	// --- Related notes ---
+	if len(n.Related) > 0 {
+		b.WriteString("\n## Related\n\n")
+		for _, r := range n.Related {
+			if r.Title != "" {
+				fmt.Fprintf(&b, "- [[%s]] %s\n", r.ID, r.Title)
+			} else {
+				fmt.Fprintf(&b, "- [[%s]]\n", r.ID)
+			}
+		}
+	}
+
+	// --- Evidence/References ---
+	if n.Evidence.SourceCommand != "" || n.Evidence.Tool != "" || n.Evidence.SessionID != "" || len(n.Evidence.Screenshots) > 0 {
+		b.WriteString("\n## References\n\n")
+		if n.Evidence.SourceCommand != "" {
+			fmt.Fprintf(&b, "- Command: `%s`\n", n.Evidence.SourceCommand)
+		}
+		if n.Evidence.Tool != "" {
+			fmt.Fprintf(&b, "- Tool: %s\n", n.Evidence.Tool)
+		}
+		if n.Evidence.CapturedAt != "" {
+			fmt.Fprintf(&b, "- Captured: %s\n", n.Evidence.CapturedAt)
+		}
+		if n.Evidence.SessionID != "" {
+			fmt.Fprintf(&b, "- Session: %s\n", n.Evidence.SessionID)
+		}
+		for _, ss := range n.Evidence.Screenshots {
+			fmt.Fprintf(&b, "- ![[%s]]\n", ss)
+		}
+	}
+
+	// --- Metadata footer ---
+	b.WriteString("\n---\n")
+	fmt.Fprintf(&b, "id: %s\n", n.ID)
+	fmt.Fprintf(&b, "type: %s\n", n.ContentType)
+	if n.Domain != "" {
+		fmt.Fprintf(&b, "domain: %s\n", n.Domain)
+	}
+	if n.TopicCluster != "" {
+		fmt.Fprintf(&b, "topic_cluster: %s\n", n.TopicCluster)
+	}
+	if n.Box != "" {
+		fmt.Fprintf(&b, "box: %s\n", n.Box)
+	}
+	if n.Phase != "" {
+		fmt.Fprintf(&b, "phase: %s\n", n.Phase)
+	}
+	if n.From != "" {
+		fmt.Fprintf(&b, "from: %s\n", n.From)
+	}
 	if len(n.Tags) > 0 {
 		var tagLinks []string
 		for _, tag := range n.Tags {
-			tagLinks = append(tagLinks, fmt.Sprintf("#%s", tag))
+			tagLinks = append(tagLinks, "#"+tag)
 		}
-		fmt.Fprintf(&b, "%s\n", strings.Join(tagLinks, " "))
+		fmt.Fprintf(&b, "tags: %s\n", strings.Join(tagLinks, " "))
+	}
+	if n.ContentType == "knowledge" {
+		b.WriteString("retention: new | ef=2.5 | interval=0\n")
 	}
 
 	return b.String()

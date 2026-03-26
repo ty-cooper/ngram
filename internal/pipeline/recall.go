@@ -3,7 +3,6 @@ package pipeline
 import (
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/ty-cooper/ngram/internal/search"
 )
@@ -52,25 +51,14 @@ func (p *Processor) recallPass(note *ProcessedNote) []RecallResult {
 	return recalls
 }
 
-// appendRecallSection adds a "Related Knowledge" section to a note body.
-func appendRecallSection(note *ProcessedNote, recalls []RecallResult) {
-	if len(recalls) == 0 {
-		return
-	}
-	var b strings.Builder
-	b.WriteString("\n\n## Related Knowledge\n\n")
+// addRecallLinks populates the Related field on a ProcessedNote instead of appending text.
+func addRecallLinks(note *ProcessedNote, recalls []RecallResult) {
 	for _, r := range recalls {
-		ctx := r.Box
-		if ctx == "" {
-			ctx = "general"
-		}
-		summary := r.Summary
-		if summary == "" {
-			summary = r.Title
-		}
-		fmt.Fprintf(&b, "- [[%s]] (%s) — %s\n", r.Title, ctx, summary)
+		note.Related = append(note.Related, RelatedLink{
+			ID:    r.NoteID,
+			Title: r.Title,
+		})
 	}
-	note.Body += b.String()
 }
 
 // RecallSearch performs a cross-engagement search for the CLI command.

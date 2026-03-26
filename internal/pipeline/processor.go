@@ -160,7 +160,7 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 		// Cross-engagement recall.
 		if recalls := p.recallPass(processed); len(recalls) > 0 {
 			log.Printf("ngram: recall — %d related notes from other engagements", len(recalls))
-			appendRecallSection(processed, recalls)
+			addRecallLinks(processed, recalls)
 		}
 
 		dir, filename := Route(processed)
