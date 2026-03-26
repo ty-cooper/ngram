@@ -72,10 +72,42 @@ func (d *Daemon) SetEngaged(engaged bool, name string) {
 	d.engName = name
 }
 
+// AcquireLock attempts to get an exclusive file lock for the daemon.
+// Returns the lock file (caller must keep reference to prevent GC) or error if already locked.
+func AcquireLock(vaultPath string) (*os.File, error) {
+	lockPath := filepath.Join(vaultPath, "_meta", "daemon.lock")
+	vault.EnsureDir(filepath.Dir(lockPath))
+
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("open lock file: %w", err)
+	}
+
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("another ngram daemon is running")
+	}
+
+	// Write PID for debugging.
+	f.Truncate(0)
+	f.Seek(0, 0)
+	fmt.Fprintf(f, "%d\n", os.Getpid())
+	f.Sync()
+
+	return f, nil
+}
+
 // Run starts all services and blocks until SIGTERM/SIGINT.
 func (d *Daemon) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	// Acquire exclusive lock.
+	lockFile, err := AcquireLock(d.VaultPath)
+	if err != nil {
+		return err
+	}
+	defer lockFile.Close()
 
 	// Set up persistent logging to _meta/daemon.log alongside stdout.
 	d.setupLogging()
