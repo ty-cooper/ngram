@@ -71,6 +71,19 @@ func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string, vaultPath
 		}
 	}
 
+	// Remove system/blacklisted tags and domain-as-tag.
+	blacklist := map[string]bool{
+		"inbox": true, "test": true, "log": true,
+		"capture-session": true, "ngramcapture": true,
+	}
+	domains := tax.CanonicalDomainList()
+	for _, d := range domains {
+		blacklist[d] = true
+	}
+	for t := range blacklist {
+		delete(allTags, t)
+	}
+
 	if len(allTags) > 0 {
 		tagList := make([]string, 0, len(allTags))
 		for t := range allTags {
