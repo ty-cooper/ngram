@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	langsmith "github.com/ty-cooper/langsmith-go"
 	"github.com/ty-cooper/ngram/internal/llm"
 	"github.com/ty-cooper/ngram/internal/search"
 	"github.com/ty-cooper/ngram/internal/taxonomy"
@@ -43,6 +44,26 @@ type Runner struct {
 
 func (r *Runner) Run(ctx context.Context) (*Report, error) {
 	report := &Report{Date: time.Now().Format("2006-01-02")}
+
+	// Create root LangSmith trace for the dream cycle.
+	if r.LLM.Tracer != nil {
+		rootTrace := langsmith.NewRunTree(
+			"dream: "+report.Date,
+			langsmith.RunTypeChain,
+			langsmith.WithRunTreeClient(r.LLM.Tracer),
+		)
+		rootTrace.SetInputs(map[string]any{"date": report.Date})
+		rootTrace.PostRun()
+		ctx = langsmith.ContextWithRunTree(ctx, rootTrace)
+		defer func() {
+			rootTrace.End(langsmith.WithEndOutputs(map[string]any{
+				"reviewed":    report.Reviewed,
+				"merges":      len(report.Merges),
+				"archives":    len(report.Archives),
+				"reclusters":  len(report.Reclusters),
+			}))
+		}()
+	}
 
 	// 1. Load all notes and filter by dream state.
 	allNotes, err := r.loadNotes()

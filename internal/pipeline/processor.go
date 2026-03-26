@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	langsmith "github.com/ty-cooper/langsmith-go"
 	"github.com/ty-cooper/ngram/internal/llm"
 	"github.com/ty-cooper/ngram/internal/notify"
 	"github.com/ty-cooper/ngram/internal/search"
@@ -35,6 +36,24 @@ type Processor struct {
 // Process runs the full pipeline for a single file or capture bundle in _inbox/.
 func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 	start := time.Now()
+
+	// Create a root LangSmith trace for the entire processing pipeline.
+	var rootTrace *langsmith.RunTree
+	if p.Runner.Tracer != nil {
+		rootTrace = langsmith.NewRunTree(
+			"process: "+filepath.Base(inboxPath),
+			langsmith.RunTypeChain,
+			langsmith.WithRunTreeClient(p.Runner.Tracer),
+		)
+		rootTrace.SetInputs(map[string]any{
+			"file": filepath.Base(inboxPath),
+		})
+		rootTrace.PostRun()
+		ctx = langsmith.ContextWithRunTree(ctx, rootTrace)
+		defer func() {
+			rootTrace.End()
+		}()
+	}
 
 	// Check if this is a capture bundle (directory with manifest.yml).
 	if IsBundle(inboxPath) {
