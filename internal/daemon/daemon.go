@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -72,6 +73,9 @@ func (d *Daemon) SetEngaged(engaged bool, name string) {
 func (d *Daemon) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	// Set up persistent logging to _meta/daemon.log alongside stdout.
+	d.setupLogging()
 
 	// Signal handling.
 	sigCh := make(chan os.Signal, 1)
@@ -256,4 +260,32 @@ func StopMeilisearch(vaultPath string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+const maxLogSize = 10 * 1024 * 1024 // 10 MB
+
+// setupLogging configures log output to both stdout and _meta/daemon.log.
+// Rotates the log file if it exceeds maxLogSize.
+func (d *Daemon) setupLogging() {
+	metaDir := filepath.Join(d.VaultPath, "_meta")
+	vault.EnsureDir(metaDir)
+
+	logPath := filepath.Join(metaDir, "daemon.log")
+
+	// Rotate if too large.
+	if info, err := os.Stat(logPath); err == nil && info.Size() > maxLogSize {
+		rotated := logPath + ".1"
+		os.Remove(rotated)
+		os.Rename(logPath, rotated)
+	}
+
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		log.Printf("warn: could not open daemon.log: %v", err)
+		return
+	}
+
+	// Write to both stdout and file.
+	multi := io.MultiWriter(os.Stdout, f)
+	log.SetOutput(multi)
 }

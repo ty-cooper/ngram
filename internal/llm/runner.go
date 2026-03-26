@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/567-labs/instructor-go/pkg/instructor"
@@ -204,12 +205,15 @@ func readImage(imgPath string) ([]byte, string, error) {
 	ext := strings.ToLower(filepath.Ext(imgPath))
 
 	if ext == ".heic" || ext == ".heif" {
+		if runtime.GOOS != "darwin" {
+			return nil, "", fmt.Errorf("HEIC/HEIF conversion requires macOS (sips). Convert %s to JPEG manually", filepath.Base(imgPath))
+		}
 		tmpFile := imgPath + ".converted.jpg"
 		defer os.Remove(tmpFile)
 
 		cmd := execCommand("sips", "-s", "format", "jpeg", imgPath, "--out", tmpFile)
 		if err := cmd.Run(); err != nil {
-			return nil, "", fmt.Errorf("convert HEIC: %w", err)
+			return nil, "", fmt.Errorf("convert HEIC via sips: %w", err)
 		}
 		data, err := os.ReadFile(tmpFile)
 		if err != nil {
@@ -247,6 +251,10 @@ func readImage(imgPath string) ([]byte, string, error) {
 // resizeIfNeeded uses macOS sips to downsample images exceeding maxImageBytes.
 func resizeIfNeeded(imgPath string, data []byte) ([]byte, error) {
 	if len(data) <= maxImageBytes {
+		return data, nil
+	}
+	if runtime.GOOS != "darwin" {
+		// Can't resize without sips — send original.
 		return data, nil
 	}
 
