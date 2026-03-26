@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -24,6 +25,8 @@ type Taxonomy struct {
 	// Precomputed reverse lookup maps.
 	domainAliases map[string]string
 	tagAliases    map[string]string
+
+	mu sync.RWMutex
 }
 
 // Load reads and parses _meta/taxonomy.yml from the vault.
@@ -77,8 +80,9 @@ func (t *Taxonomy) buildAliasMap() {
 // ResolveDomain maps a raw domain string to its canonical form.
 // Returns the input unchanged if no match.
 func (t *Taxonomy) ResolveDomain(raw string) string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	lower := strings.ToLower(raw)
-	// Check if already canonical.
 	if _, ok := t.Domains[lower]; ok {
 		return lower
 	}
@@ -90,6 +94,12 @@ func (t *Taxonomy) ResolveDomain(raw string) string {
 
 // ResolveTag maps a raw tag to its canonical form.
 func (t *Taxonomy) ResolveTag(raw string) string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.resolveTagLocked(raw)
+}
+
+func (t *Taxonomy) resolveTagLocked(raw string) string {
 	lower := strings.ToLower(raw)
 	if _, ok := t.Tags[lower]; ok {
 		return lower
@@ -102,10 +112,12 @@ func (t *Taxonomy) ResolveTag(raw string) string {
 
 // ResolveTags resolves a slice of raw tags, deduplicating.
 func (t *Taxonomy) ResolveTags(raw []string) []string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	seen := make(map[string]bool)
 	var result []string
 	for _, tag := range raw {
-		resolved := t.ResolveTag(tag)
+		resolved := t.resolveTagLocked(tag)
 		if !seen[resolved] {
 			seen[resolved] = true
 			result = append(result, resolved)
@@ -116,6 +128,8 @@ func (t *Taxonomy) ResolveTags(raw []string) []string {
 
 // CanonicalTagList returns all canonical tag names.
 func (t *Taxonomy) CanonicalTagList() []string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	tags := make([]string, 0, len(t.Tags))
 	for k := range t.Tags {
 		tags = append(tags, k)
@@ -125,6 +139,8 @@ func (t *Taxonomy) CanonicalTagList() []string {
 
 // CanonicalDomainList returns all canonical domain names.
 func (t *Taxonomy) CanonicalDomainList() []string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	domains := make([]string, 0, len(t.Domains))
 	for k := range t.Domains {
 		domains = append(domains, k)
@@ -145,6 +161,8 @@ func (t *Taxonomy) IsKnownTag(tag string) bool {
 // RegisterTags adds any unknown tags to the taxonomy as new canonical entries
 // and persists the updated taxonomy to disk. First-come-first-serve.
 func (t *Taxonomy) RegisterTags(tags []string, vaultPath string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	dirty := false
 	for _, tag := range tags {
 		if tag == "" {
@@ -163,6 +181,8 @@ func (t *Taxonomy) RegisterTags(tags []string, vaultPath string) {
 
 // RegisterDomain adds an unknown domain to the taxonomy and persists.
 func (t *Taxonomy) RegisterDomain(domain string, vaultPath string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	if domain == "" {
 		return
 	}

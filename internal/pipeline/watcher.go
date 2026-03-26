@@ -13,9 +13,12 @@ import (
 )
 
 // Watcher monitors _inbox/ for new files and dispatches them to the processor.
+// MaxConcurrent limits parallel API calls (default 2).
 type Watcher struct {
-	VaultPath string
-	Processor *Processor
+	VaultPath     string
+	Processor     *Processor
+	MaxConcurrent int
+	sem           chan struct{}
 }
 
 // Start begins watching _inbox/ for new files. Blocks until ctx is cancelled.
@@ -24,6 +27,13 @@ func (w *Watcher) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// Initialize concurrency limiter.
+	maxC := w.MaxConcurrent
+	if maxC <= 0 {
+		maxC = 2
+	}
+	w.sem = make(chan struct{}, maxC)
 
 	// Crash recovery: move orphaned _processing/ files back to _inbox/.
 	w.recoverOrphans()
@@ -148,6 +158,8 @@ func (w *Watcher) debouncedWatch(ctx context.Context, watcher *fsnotify.Watcher)
 					}
 
 					go func(p string) {
+						w.sem <- struct{}{}        // acquire
+						defer func() { <-w.sem }() // release
 						if err := w.Processor.Process(ctx, p); err != nil {
 							log.Printf("error: process %s: %v", filepath.Base(p), err)
 						}

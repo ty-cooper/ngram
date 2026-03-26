@@ -240,44 +240,15 @@ func (p *Processor) processBundle(ctx context.Context, inboxPath string, start t
 	if err != nil {
 		return fmt.Errorf("validate bundle: %w", err)
 	}
-	structured := notes[0]
 
-	// Resolve taxonomy.
-	if p.Taxonomy != nil {
-		structured.Domain = p.Taxonomy.ResolveDomain(structured.Domain)
-		structured.Tags = p.Taxonomy.ResolveTags(structured.Tags)
-	}
-
-	// Create processed note.
-	processed := &ProcessedNote{
-		StructuredNote: *structured,
-		ID:             GenerateID(),
-		Source:         "capture-session",
-		Box:            bundle.Box,
-		Phase:          bundle.Phase,
-		Created:        time.Now().UTC(),
-		Evidence: EvidenceChain{
-			CapturedAt: time.Now().UTC().Format(time.RFC3339),
-			SessionID:  bundle.SessionID,
-			SourceFile: filepath.Base(inboxPath),
-		},
-	}
-
-	// Route and write note.
-	dir, filename := Route(processed)
-	destDir := filepath.Join(p.VaultPath, dir)
-	if err := vault.EnsureDir(destDir); err != nil {
-		return fmt.Errorf("ensure dir %s: %w", dir, err)
-	}
-
-	// Copy screenshots to _assets/ and embed links in the note.
+	// Copy screenshots to _assets/ once, shared across all notes.
 	assetsDir := filepath.Join(p.VaultPath, "_assets")
 	vault.EnsureDir(assetsDir)
 	var screenshots []string
 	for _, item := range bundle.Items {
 		if item.Type == "screenshot" {
 			src := filepath.Join(bundleDir, item.File)
-			assetName := fmt.Sprintf("%s-%s", processed.ID, item.File)
+			assetName := fmt.Sprintf("%s-%s", bundle.SessionID, item.File)
 			dst := filepath.Join(assetsDir, assetName)
 			if data, err := os.ReadFile(src); err == nil {
 				os.WriteFile(dst, data, 0o644)
@@ -285,48 +256,79 @@ func (p *Processor) processBundle(ctx context.Context, inboxPath string, start t
 			}
 		}
 	}
-	if len(screenshots) > 0 {
-		processed.Evidence.Screenshots = screenshots
-		var embeds strings.Builder
-		embeds.WriteString("\n\n## Screenshots\n\n")
-		for _, ss := range screenshots {
-			fmt.Fprintf(&embeds, "![[%s]]\n\n", ss)
+
+	for _, structured := range notes {
+		if p.Taxonomy != nil {
+			structured.Domain = p.Taxonomy.ResolveDomain(structured.Domain)
+			structured.Tags = p.Taxonomy.ResolveTags(structured.Tags)
+			p.Taxonomy.RegisterTags(structured.Tags, p.VaultPath)
+			p.Taxonomy.RegisterDomain(structured.Domain, p.VaultPath)
 		}
-		processed.Body += embeds.String()
+
+		processed := &ProcessedNote{
+			StructuredNote: *structured,
+			ID:             GenerateID(),
+			Source:         "capture-session",
+			Box:            bundle.Box,
+			Phase:          bundle.Phase,
+			Created:        time.Now().UTC(),
+			Evidence: EvidenceChain{
+				CapturedAt: time.Now().UTC().Format(time.RFC3339),
+				SessionID:  bundle.SessionID,
+				SourceFile: filepath.Base(inboxPath),
+				Screenshots: screenshots,
+			},
+		}
+
+		if len(screenshots) > 0 {
+			var embeds strings.Builder
+			embeds.WriteString("\n\n## Screenshots\n\n")
+			for _, ss := range screenshots {
+				fmt.Fprintf(&embeds, "![[%s]]\n\n", ss)
+			}
+			processed.Body += embeds.String()
+		}
+
+		dir, filename := Route(processed)
+		destDir := filepath.Join(p.VaultPath, dir)
+		if err := vault.EnsureDir(destDir); err != nil {
+			log.Printf("warn: ensure dir %s: %v", dir, err)
+			continue
+		}
+
+		destPath := filepath.Join(destDir, filename)
+		content := BuildNoteContent(processed)
+		if err := atomicWrite(destPath, content); err != nil {
+			log.Printf("warn: write note: %v", err)
+			continue
+		}
+
+		relPath := filepath.Join(dir, filename)
+		log.Printf("ngram: structured bundle %s → %s", processed.ID, relPath)
+
+		if p.SearchClient != nil {
+			doc := search.NoteDocument{
+				ID:          processed.ID,
+				Title:       processed.Title,
+				Body:        processed.Body,
+				Summary:     processed.Summary,
+				Tags:        processed.Tags,
+				Domain:      processed.Domain,
+				ContentType: processed.ContentType,
+				Box:         processed.Box,
+				Phase:       processed.Phase,
+				FilePath:    relPath,
+				Captured:    processed.Created.Unix(),
+			}
+			if err := p.SearchClient.IndexNote(doc); err != nil {
+				log.Printf("warn: index failed for %s: %v", processed.ID, err)
+			}
+		}
+
+		p.gitCommit(relPath, processed.ID, "capture-session")
 	}
 
-	destPath := filepath.Join(destDir, filename)
-	content := BuildNoteContent(processed)
-
-	if err := atomicWrite(destPath, content); err != nil {
-		return fmt.Errorf("write note: %w", err)
-	}
-
-	relPath := filepath.Join(dir, filename)
-	log.Printf("ngram: structured bundle %s → %s (%d items)", processed.ID, relPath, len(bundle.Items))
-
-	// Index.
-	if p.SearchClient != nil {
-		doc := search.NoteDocument{
-			ID:          processed.ID,
-			Title:       processed.Title,
-			Body:        processed.Body,
-			Summary:     processed.Summary,
-			Tags:        processed.Tags,
-			Domain:      processed.Domain,
-			ContentType: processed.ContentType,
-			Box:         processed.Box,
-			Phase:       processed.Phase,
-			FilePath:    relPath,
-			Captured:    processed.Created.Unix(),
-		}
-		if err := p.SearchClient.IndexNote(doc); err != nil {
-			log.Printf("warn: index failed for %s: %v", processed.ID, err)
-		}
-	}
-
-	notify.Send("Ngram", fmt.Sprintf("Structured bundle: %s → %s", processed.Title, relPath))
-	p.gitCommit(relPath, processed.ID, "capture-session")
+	notify.Send("Ngram", fmt.Sprintf("Structured %d note(s) from bundle", len(notes)))
 
 	// Archive the bundle directory.
 	archiveDir := filepath.Join(p.VaultPath, "_archive")
@@ -334,7 +336,7 @@ func (p *Processor) processBundle(ctx context.Context, inboxPath string, start t
 	os.Rename(bundleDir, filepath.Join(archiveDir, filepath.Base(bundleDir)))
 
 	duration := time.Since(start).Milliseconds()
-	p.logUsage(processed.ID, "processor-bundle", duration)
+	p.logUsage("bundle", "processor-bundle", duration)
 
 	return nil
 }
