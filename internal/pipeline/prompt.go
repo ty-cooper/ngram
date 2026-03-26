@@ -26,10 +26,17 @@ TAGS (STRICT):
 - HEAVILY prefer existing tags from the ALLOWED TAGS list. Only create a new tag if NO existing tag fits.
 - Tags should be specific and useful for retrieval, not generic filler like "security" or "tool".
 - Do NOT create near-duplicates of existing tags (e.g. "nmap-scanning" when "nmap" exists).
+- NEVER use the domain name as a tag (e.g. if domain is "biology", don't add "biology" as a tag).
+- NEVER use system tags: "inbox", "test", "log", "capture-session". These are internal and not for knowledge notes.
 
 DISCARD:
 If the input is incoherent gibberish (e.g. "asdfghjk"), test/debug data (e.g. "testing 123"), or truly empty, return {"notes": [], "discard": true, "discard_reason": "..."}.
 ANY coherent factual statement is valid knowledge — never discard based on topic or domain. "the plural of zebra is zebrae" is valid. "nmap -sV scans versions" is valid. ALL topics are welcome.
+
+DOMAIN vs TOPIC CLUSTER vs TAGS:
+- domain: broad knowledge area (e.g. "biology", "penetration-testing"). One per note.
+- topic_cluster: subtopic within the domain (e.g. "neurology" under "biology"). Groups related notes.
+- tags: cross-cutting retrieval labels (e.g. "nmap", "fish"). Specific, not generic. Never duplicate the domain.
 
 CONTENT TYPES:
 - knowledge: concepts, explanations (quizzed)
