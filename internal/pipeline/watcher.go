@@ -22,18 +22,43 @@ type Watcher struct {
 }
 
 // Start begins watching _inbox/ for new files. Blocks until ctx is cancelled.
+// Auto-restarts on fsnotify errors with exponential backoff.
 func (w *Watcher) Start(ctx context.Context) error {
-	inboxDir, err := vault.InboxDir(w.VaultPath)
-	if err != nil {
-		return err
-	}
-
 	// Initialize concurrency limiter.
 	maxC := w.MaxConcurrent
 	if maxC <= 0 {
 		maxC = 2
 	}
 	w.sem = make(chan struct{}, maxC)
+
+	backoff := time.Second
+	for {
+		err := w.watchOnce(ctx)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err != nil {
+			log.Printf("warn: watcher error: %v, restarting in %s", err, backoff)
+			select {
+			case <-time.After(backoff):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			backoff *= 2
+			if backoff > 30*time.Second {
+				backoff = 30 * time.Second
+			}
+			continue
+		}
+		return nil
+	}
+}
+
+func (w *Watcher) watchOnce(ctx context.Context) error {
+	inboxDir, err := vault.InboxDir(w.VaultPath)
+	if err != nil {
+		return err
+	}
 
 	// Crash recovery: move orphaned _processing/ files back to _inbox/.
 	w.recoverOrphans()

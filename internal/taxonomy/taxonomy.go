@@ -205,5 +205,22 @@ func (t *Taxonomy) save(vaultPath string) {
 		return
 	}
 	header := []byte("# Canonical tags and domains for Ngram vault.\n# Auto-populated as notes are processed. First tag wins as canonical.\n\n")
-	os.WriteFile(path, append(header, data...), 0o644)
+	content := append(header, data...)
+
+	// Atomic write: temp file + rename to prevent corruption on crash.
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".taxonomy-*.yml")
+	if err != nil {
+		os.WriteFile(path, content, 0o644) // fallback
+		return
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(content); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return
+	}
+	tmp.Close()
+	if err := os.Rename(tmpName, path); err != nil {
+		os.Remove(tmpName)
+	}
 }

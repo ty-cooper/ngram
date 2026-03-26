@@ -412,6 +412,38 @@ func hitFloat(hit meilisearch.Hit, key string) float64 {
 	return f
 }
 
+// ListAllIDs returns all document IDs in the index for reconciliation.
+func (c *Client) ListAllIDs() (map[string]bool, error) {
+	ids := make(map[string]bool)
+	var offset int64
+	for {
+		req := &meilisearch.DocumentsQuery{
+			Limit:  1000,
+			Offset: offset,
+			Fields: []string{"id"},
+		}
+		var result meilisearch.DocumentsResult
+		if err := c.index.GetDocuments(req, &result); err != nil {
+			return nil, fmt.Errorf("get documents: %w", err)
+		}
+		for _, doc := range result.Results {
+			raw, ok := doc["id"]
+			if !ok {
+				continue
+			}
+			var s string
+			if err := json.Unmarshal(raw, &s); err == nil {
+				ids[s] = true
+			}
+		}
+		if int64(len(result.Results)) < 1000 {
+			break
+		}
+		offset += 1000
+	}
+	return ids, nil
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

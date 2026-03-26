@@ -20,6 +20,8 @@ import (
 	"github.com/ty-cooper/ngram/internal/vault"
 )
 
+const maxInputBytes = 100 * 1024 // 100KB — truncate text content beyond this
+
 // Processor runs the structuring pipeline for notes in _inbox/.
 type Processor struct {
 	VaultPath    string
@@ -44,6 +46,14 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 		return p.processImage(ctx, inboxPath, start)
 	}
 
+	// 0. Git-commit raw inbox file before processing (crash safety).
+	p.gitCommitInbox(inboxPath)
+
+	// 0b. Check input size limit (100KB text).
+	if info, err := os.Stat(inboxPath); err == nil && info.Size() > maxInputBytes {
+		log.Printf("warn: %s exceeds %dKB limit (%d bytes), truncating", filepath.Base(inboxPath), maxInputBytes/1024, info.Size())
+	}
+
 	// 1. Move to _processing/.
 	procPath, err := p.moveToProcessing(inboxPath)
 	if err != nil {
@@ -54,6 +64,9 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 	raw, err := os.ReadFile(procPath)
 	if err != nil {
 		return fmt.Errorf("read raw: %w", err)
+	}
+	if len(raw) > maxInputBytes {
+		raw = raw[:maxInputBytes]
 	}
 	rawContent := string(raw)
 
@@ -521,7 +534,8 @@ func (p *Processor) gitCommit(relPath, noteID, source string) {
 
 	msg := fmt.Sprintf("ngram: structured %s from %s", noteID, source)
 
-	add := exec.Command("git", "add", relPath)
+	// Only stage the specific file — never use -A or . to prevent staging secrets.
+	add := exec.Command("git", "add", "--", relPath)
 	add.Dir = p.VaultPath
 	if err := add.Run(); err != nil {
 		log.Printf("warn: git add: %v", err)
@@ -533,6 +547,31 @@ func (p *Processor) gitCommit(relPath, noteID, source string) {
 	if err := commit.Run(); err != nil {
 		log.Printf("warn: git commit: %v", err)
 	}
+}
+
+// gitCommitInbox commits a raw inbox file on arrival for safety.
+func (p *Processor) gitCommitInbox(inboxPath string) {
+	check := exec.Command("git", "rev-parse", "--git-dir")
+	check.Dir = p.VaultPath
+	if err := check.Run(); err != nil {
+		return
+	}
+
+	rel, err := filepath.Rel(p.VaultPath, inboxPath)
+	if err != nil {
+		return
+	}
+
+	add := exec.Command("git", "add", "--", rel)
+	add.Dir = p.VaultPath
+	if err := add.Run(); err != nil {
+		return
+	}
+
+	msg := fmt.Sprintf("ngram: inbox received %s", filepath.Base(inboxPath))
+	commit := exec.Command("git", "commit", "-m", msg)
+	commit.Dir = p.VaultPath
+	commit.Run()
 }
 
 func (p *Processor) archiveRaw(processingPath string) error {
@@ -549,10 +588,12 @@ func (p *Processor) logUsage(noteID, component string, durationMs int64) {
 	vault.EnsureDir(metaDir)
 
 	entry := map[string]interface{}{
-		"timestamp":   time.Now().UTC().Format(time.RFC3339),
-		"component":   component,
-		"note_id":     noteID,
-		"duration_ms": durationMs,
+		"timestamp":     time.Now().UTC().Format(time.RFC3339),
+		"component":     component,
+		"note_id":       noteID,
+		"duration_ms":   durationMs,
+		"input_tokens":  p.Runner.LastUsage.InputTokens,
+		"output_tokens": p.Runner.LastUsage.OutputTokens,
 	}
 	data, _ := json.Marshal(entry)
 

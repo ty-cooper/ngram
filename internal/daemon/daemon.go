@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -288,4 +289,8 @@ func (d *Daemon) setupLogging() {
 	// Write to both stdout and file.
 	multi := io.MultiWriter(os.Stdout, f)
 	log.SetOutput(multi)
+
+	// Set up structured JSON logger for the file (queryable).
+	jsonHandler := slog.NewJSONHandler(f, &slog.HandlerOptions{Level: slog.LevelInfo})
+	slog.SetDefault(slog.New(jsonHandler))
 }

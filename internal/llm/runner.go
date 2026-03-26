@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/567-labs/instructor-go/pkg/instructor"
 	anthropic "github.com/liushuangls/go-anthropic/v2"
@@ -21,7 +22,16 @@ var (
 	ErrAuthExpired = errors.New("anthropic API key missing or invalid")
 )
 
-const defaultModel = "claude-sonnet-4-6"
+const (
+	defaultModel  = "claude-sonnet-4-6"
+	callTimeout   = 90 * time.Second // Max time per LLM call
+)
+
+// Usage tracks token consumption from the last API call.
+type Usage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
+}
 
 // Runner wraps Anthropic API calls via instructor-go for type-safe structured output
 // and raw client for free-text responses.
@@ -29,6 +39,7 @@ type Runner struct {
 	Model        string // "cloud", "off", "mock"
 	VaultPath    string
 	MockResponse []byte // For testing: if set, returns this instead of calling API.
+	LastUsage    Usage  // Token counts from last API call.
 	instructor   *instructor.InstructorAnthropic
 	rawClient    *anthropic.Client
 	hasClient    bool
@@ -104,6 +115,10 @@ func (r *Runner) Instruct(ctx context.Context, prompt string, result any, opts .
 		o(cfg)
 	}
 
+	// Enforce call timeout.
+	ctx, cancel := context.WithTimeout(ctx, callTimeout)
+	defer cancel()
+
 	content := buildMessageContent(prompt, cfg.images)
 
 	req := anthropic.MessagesRequest{
@@ -143,6 +158,10 @@ func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]b
 		o(cfg)
 	}
 
+	// Enforce call timeout.
+	ctx, cancel := context.WithTimeout(ctx, callTimeout)
+	defer cancel()
+
 	content := buildMessageContent(prompt, cfg.images)
 
 	req := anthropic.MessagesRequest{
@@ -160,6 +179,12 @@ func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]b
 	resp, err := r.rawClient.CreateMessages(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("anthropic api: %w", err)
+	}
+
+	// Track token usage.
+	r.LastUsage = Usage{
+		InputTokens:  resp.Usage.InputTokens,
+		OutputTokens: resp.Usage.OutputTokens,
 	}
 
 	var result strings.Builder

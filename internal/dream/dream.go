@@ -104,6 +104,11 @@ func (r *Runner) Run(ctx context.Context) (*Report, error) {
 		report.Reclusters = append(report.Reclusters, clusters...)
 	}
 
+	// 5. Index reconciliation — clean stale entries.
+	if r.Search != nil {
+		r.reconcileIndex(allNotes)
+	}
+
 	report.NoAction = report.Reviewed - len(report.Merges) - len(report.Archives) - len(report.Reclusters) - len(report.Retags)
 	if report.NoAction < 0 {
 		report.NoAction = 0
@@ -406,6 +411,32 @@ func stripCodeFences(data []byte) []byte {
 		s = strings.TrimSpace(s)
 	}
 	return []byte(s)
+}
+
+// reconcileIndex removes Meilisearch entries for notes no longer on disk.
+func (r *Runner) reconcileIndex(diskNotes []noteEntry) {
+	diskIDs := make(map[string]bool, len(diskNotes))
+	for _, n := range diskNotes {
+		diskIDs[n.ID] = true
+	}
+
+	indexedIDs, err := r.Search.ListAllIDs()
+	if err != nil {
+		log.Printf("dream: index reconciliation failed: %v", err)
+		return
+	}
+
+	var stale int
+	for id := range indexedIDs {
+		if !diskIDs[id] {
+			if err := r.Search.DeleteNote(id); err == nil {
+				stale++
+			}
+		}
+	}
+	if stale > 0 {
+		log.Printf("dream: cleaned %d stale index entries", stale)
+	}
 }
 
 func min(a, b int) int {
