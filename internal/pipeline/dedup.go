@@ -15,10 +15,7 @@ import (
 	"github.com/ty-cooper/ngram/internal/vault"
 )
 
-const (
-	dedupThreshold     = 0.75 // Minimum score to consider dedup
-	autoDupThreshold   = 0.95 // Auto-duplicate without LLM call
-)
+const dedupThreshold = 0.75 // Minimum score to consider dedup
 
 // DedupDecision is the master agent's decision.
 type DedupDecision struct {
@@ -75,24 +72,8 @@ func (d *Deduplicator) Check(ctx context.Context, note *StructuredNote, procPath
 		return &DedupResult{Action: "proceed", Reason: "no similar notes above threshold"}
 	}
 
-	// Fast path: very high score = auto-duplicate without LLM call.
-	for _, s := range aboveThreshold {
-		if s.Score >= autoDupThreshold && s.Domain == note.Domain {
-			log.Printf("ngram: dedup fast path — auto-duplicate of %s (score %.2f)", s.ID, s.Score)
-			d.handleDuplicate(note, &DedupDecision{
-				Decision:     "duplicate",
-				TargetNoteID: s.ID,
-				Reason:       fmt.Sprintf("auto-duplicate: score %.2f >= %.2f", s.Score, autoDupThreshold),
-			}, "")
-			return &DedupResult{
-				Action:   "duplicate",
-				Reason:   fmt.Sprintf("auto-duplicate (score %.2f)", s.Score),
-				TargetID: s.ID,
-			}
-		}
-	}
-
-	// Call master agent for decision.
+	// Always use the LLM master agent — even high-score matches
+	// may contain new information that should be appended.
 	decision, err := d.callMasterAgent(ctx, note, aboveThreshold)
 	if err != nil {
 		log.Printf("warn: dedup master agent failed: %v, defaulting to NEW", err)
