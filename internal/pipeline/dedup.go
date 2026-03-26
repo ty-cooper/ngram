@@ -15,7 +15,10 @@ import (
 	"github.com/ty-cooper/ngram/internal/vault"
 )
 
-const dedupThreshold = 0.75 // Lowered for hybrid (semantic + keyword) score distribution
+const (
+	dedupThreshold     = 0.75 // Minimum score to consider dedup
+	autoDupThreshold   = 0.95 // Auto-duplicate without LLM call
+)
 
 // DedupDecision is the master agent's decision.
 type DedupDecision struct {
@@ -70,6 +73,23 @@ func (d *Deduplicator) Check(ctx context.Context, note *StructuredNote, procPath
 
 	if len(aboveThreshold) == 0 {
 		return &DedupResult{Action: "proceed", Reason: "no similar notes above threshold"}
+	}
+
+	// Fast path: very high score = auto-duplicate without LLM call.
+	for _, s := range aboveThreshold {
+		if s.Score >= autoDupThreshold && s.Domain == note.Domain {
+			log.Printf("ngram: dedup fast path — auto-duplicate of %s (score %.2f)", s.ID, s.Score)
+			d.handleDuplicate(note, &DedupDecision{
+				Decision:     "duplicate",
+				TargetNoteID: s.ID,
+				Reason:       fmt.Sprintf("auto-duplicate: score %.2f >= %.2f", s.Score, autoDupThreshold),
+			}, "")
+			return &DedupResult{
+				Action:   "duplicate",
+				Reason:   fmt.Sprintf("auto-duplicate (score %.2f)", s.Score),
+				TargetID: s.ID,
+			}
+		}
 	}
 
 	// Call master agent for decision.
@@ -180,9 +200,13 @@ func (d *Deduplicator) handleAppend(note *StructuredNote, decision *DedupDecisio
 		return fmt.Errorf("no target note ID for append")
 	}
 
-	// Find the target note file.
+	// Find the target note file. If missing, clean stale index entry.
 	targetPath, err := d.findNoteByID(decision.TargetNoteID)
 	if err != nil {
+		if d.SearchClient != nil {
+			log.Printf("ngram: cleaning stale index entry for %s", decision.TargetNoteID)
+			d.SearchClient.DeleteNote(decision.TargetNoteID)
+		}
 		return err
 	}
 

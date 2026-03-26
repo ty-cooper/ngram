@@ -197,7 +197,9 @@ func buildMessageContent(prompt string, images []string) []anthropic.MessageCont
 	return content
 }
 
-// readImage reads an image file, converting HEIC/HEIF to JPEG if needed.
+const maxImageBytes = 5 * 1024 * 1024 // 5 MB — resize if larger
+
+// readImage reads an image file, converting HEIC/HEIF to JPEG and resizing large images.
 func readImage(imgPath string) ([]byte, string, error) {
 	ext := strings.ToLower(filepath.Ext(imgPath))
 
@@ -210,6 +212,10 @@ func readImage(imgPath string) ([]byte, string, error) {
 			return nil, "", fmt.Errorf("convert HEIC: %w", err)
 		}
 		data, err := os.ReadFile(tmpFile)
+		if err != nil {
+			return nil, "", err
+		}
+		data, err = resizeIfNeeded(tmpFile, data)
 		if err != nil {
 			return nil, "", err
 		}
@@ -230,7 +236,34 @@ func readImage(imgPath string) ([]byte, string, error) {
 	case ".webp":
 		mediaType = "image/webp"
 	}
+
+	data, err = resizeIfNeeded(imgPath, data)
+	if err != nil {
+		return nil, "", err
+	}
 	return data, mediaType, nil
+}
+
+// resizeIfNeeded uses macOS sips to downsample images exceeding maxImageBytes.
+func resizeIfNeeded(imgPath string, data []byte) ([]byte, error) {
+	if len(data) <= maxImageBytes {
+		return data, nil
+	}
+
+	tmpOut := imgPath + ".resized.jpg"
+	defer os.Remove(tmpOut)
+
+	// Resize to max 2048px on longest side and convert to JPEG for size.
+	cmd := execCommand("sips", "-Z", "2048", "-s", "format", "jpeg", imgPath, "--out", tmpOut)
+	if err := cmd.Run(); err != nil {
+		// If sips fails, return original — don't lose the image.
+		return data, nil
+	}
+	resized, err := os.ReadFile(tmpOut)
+	if err != nil {
+		return data, nil
+	}
+	return resized, nil
 }
 
 var execCommand = newExecCommand
