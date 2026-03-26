@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -74,6 +75,9 @@ func NewRunner(model, vaultPath string) *Runner {
 		langsmith.WithProject("ngram"),
 	); err == nil {
 		r.Tracer = lsClient
+		log.Printf("langsmith: tracing enabled (project: ngram)")
+	} else if os.Getenv("LANGCHAIN_API_KEY") != "" || os.Getenv("LANGSMITH_API_KEY") != "" {
+		log.Printf("warn: langsmith init failed: %v", err)
 	}
 
 	return r
@@ -180,7 +184,15 @@ func (r *Runner) Instruct(ctx context.Context, prompt string, result any, opts .
 	}
 
 	if rt != nil {
-		rt.End(langsmith.WithEndOutputs(map[string]any{"result": "ok"}))
+		// Marshal the actual structured result for the trace.
+		out := map[string]any{"status": "ok"}
+		if b, err := json.Marshal(result); err == nil {
+			var parsed any
+			if json.Unmarshal(b, &parsed) == nil {
+				out["result"] = parsed
+			}
+		}
+		rt.End(langsmith.WithEndOutputs(out))
 	}
 	return nil
 }
