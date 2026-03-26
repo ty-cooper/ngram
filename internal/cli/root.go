@@ -52,6 +52,8 @@ func init() {
 	rootCmd.AddCommand(domainsCmd)
 	rootCmd.AddCommand(newCmd)
 	rootCmd.AddCommand(ssCmd)
+	rootCmd.AddCommand(setupCmd)
+	rootCmd.AddCommand(doctorCmd)
 }
 
 func Execute() error {

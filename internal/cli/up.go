@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -56,48 +55,60 @@ func upRun(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Check if already running.
+	// Check if already running — exit cleanly so launchd doesn't restart loop.
 	if running, _ := daemon.IsRunning(c.VaultPath); running {
-		return fmt.Errorf("daemon already running (use 'n down' first)")
+		return nil
 	}
 
+	// Startup summary.
+	fmt.Println("ngram starting...")
+	fmt.Printf("  %-14s %s\n", "vault:", c.VaultPath)
+
 	// Start Meilisearch.
-	fmt.Println("starting meilisearch...")
+	msOK := false
 	if err := daemon.StartMeilisearch(c.VaultPath); err != nil {
-		log.Printf("warn: meilisearch: %v (continuing without search)", err)
+		fmt.Printf("  %-14s ✗ %v\n", "meilisearch:", err)
+	} else {
+		fmt.Printf("  %-14s %s ✓\n", "meilisearch:", c.Meilisearch.Host)
+		msOK = true
 	}
 
 	// Build services.
 	tax, _ := taxonomy.Load(c.VaultPath)
 
 	var searchClient *search.Client
-	sc, err := search.New(c.Meilisearch.Host, c.Meilisearch.APIKey)
-	if err == nil && sc.Healthy() {
-		sc.EnsureIndex()
-		if embCfg := buildEmbedderConfig(c); embCfg.Source != "" {
-			if err := sc.ConfigureEmbedder(embCfg); err != nil {
-				log.Printf("warn: embedder config failed: %v (hybrid search disabled)", err)
+	if msOK {
+		sc, err := search.New(c.Meilisearch.Host, c.Meilisearch.APIKey)
+		if err == nil && sc.Healthy() {
+			sc.EnsureIndex()
+			if embCfg := buildEmbedderConfig(c); embCfg.Source != "" {
+				if err := sc.ConfigureEmbedder(embCfg); err != nil {
+					fmt.Printf("  %-14s ✗ %v\n", "embeddings:", err)
+				} else {
+					fmt.Printf("  %-14s enabled (OpenAI) ✓\n", "embeddings:")
+				}
 			} else {
-				fmt.Println("✓ hybrid search enabled")
+				fmt.Printf("  %-14s disabled (no OPENAI_API_KEY)\n", "embeddings:")
 			}
+			searchClient = sc
 		}
-		searchClient = sc
+	}
+
+	// Tracing status.
+	if os.Getenv("LANGCHAIN_API_KEY") != "" {
+		fmt.Printf("  %-14s enabled (LangSmith) ✓\n", "tracing:")
 	}
 
 	runner := llm.NewRunner(c.Model, c.VaultPath)
 
-	// Preflight: check API auth before starting daemon.
-	fmt.Print("checking anthropic auth... ")
-	if err := runner.CheckAuth(cmd.Context()); err != nil {
-		if err == llm.ErrAuthExpired {
-			fmt.Println("✗")
-			fmt.Printf("\n  %v\n\n", err)
-			return err
-		}
-		fmt.Printf("✗ (%v)\n", err)
-		fmt.Println("  continuing with degraded AI (notes will queue in _inbox/)")
+	// Preflight: check API auth.
+	if os.Getenv("ANTHROPIC_API_KEY") == "" {
+		fmt.Printf("  %-14s ✗ not set — get one at https://console.anthropic.com\n", "anthropic:")
+		fmt.Println("  notes will queue in _inbox/ until key is set")
+	} else if err := runner.CheckAuth(cmd.Context()); err != nil {
+		fmt.Printf("  %-14s ✗ %v\n", "anthropic:", err)
 	} else {
-		fmt.Println("✓")
+		fmt.Printf("  %-14s authenticated ✓\n", "anthropic:")
 	}
 
 	var dedup *pipeline.Deduplicator
@@ -129,13 +140,8 @@ func upRun(cmd *cobra.Command, args []string) error {
 	}
 	d.OnShutdown = append(d.OnShutdown, runner.Close)
 
-	fmt.Println("✓ ngram daemon starting")
-
-	if !upForeground {
-		fmt.Printf("  PID: %d\n", os.Getpid())
-		fmt.Println("  use 'n status' to check health")
-		fmt.Println("  use 'n down' to stop")
-	}
+	fmt.Printf("  %-14s %d\n", "PID:", os.Getpid())
+	fmt.Println("✓ ngram daemon running")
 
 	return d.Run(context.Background())
 }

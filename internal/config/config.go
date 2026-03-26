@@ -70,6 +70,33 @@ func Load() (*Config, error) {
 	return &cfg, nil
 }
 
+// Validate checks the config for issues. Returns a list of problems.
+func (c *Config) Validate() []string {
+	var issues []string
+
+	if c.VaultPath == "" {
+		issues = append(issues, "vault_path is not set")
+	} else if _, err := os.Stat(c.VaultPath); os.IsNotExist(err) {
+		issues = append(issues, fmt.Sprintf("vault_path %q does not exist — run 'n setup'", c.VaultPath))
+	}
+
+	if c.Meilisearch.Host == "" {
+		issues = append(issues, "meilisearch.host is not set")
+	}
+
+	if os.Getenv("ANTHROPIC_API_KEY") == "" {
+		issues = append(issues, "ANTHROPIC_API_KEY not set — AI processing disabled")
+	}
+
+	return issues
+}
+
+// ExpandHome expands ~ in a path to the user's home directory.
+func ExpandHome(path string) string {
+	home, _ := os.UserHomeDir()
+	return expandHome(path, home)
+}
+
 func expandHome(path, home string) string {
 	if path == "~" {
 		return home

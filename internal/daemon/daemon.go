@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -215,45 +216,58 @@ func IsRunning(vaultPath string) (bool, *Heartbeat) {
 	return true, hb
 }
 
-// EnsureComposeFile writes docker-compose.yml to the vault if it doesn't exist.
-func EnsureComposeFile(vaultPath string) {
-	path := filepath.Join(vaultPath, "docker-compose.yml")
-	if _, err := os.Stat(path); err == nil {
-		return
-	}
-	content := `services:
+const composeContent = `services:
   meilisearch:
+    container_name: ngram-meilisearch
     image: getmeili/meilisearch:v1.40.0
+    restart: unless-stopped
     ports:
       - "127.0.0.1:7700:7700"
     volumes:
-      - meilisearch_data:/meili_data
+      - ngram_meilisearch_data:/meili_data
     environment:
       - MEILI_NO_ANALYTICS=true
       - MEILI_ENV=development
 
 volumes:
-  meilisearch_data:
+  ngram_meilisearch_data:
 `
-	os.WriteFile(path, []byte(content), 0o644)
+
+// composeDir returns ~/.ngram/ for the embedded docker-compose.yml.
+// Persists across reboots (unlike /tmp/).
+func composeDir() string {
+	home, _ := os.UserHomeDir()
+	dir := filepath.Join(home, ".ngram")
+	os.MkdirAll(dir, 0o755)
+	path := filepath.Join(dir, "docker-compose.yml")
+	os.WriteFile(path, []byte(composeContent), 0o644)
+	return dir
 }
 
 // StartMeilisearch runs docker compose up -d and waits for health.
 func StartMeilisearch(vaultPath string) error {
-	EnsureComposeFile(vaultPath)
+	// Check Docker is available.
+	if err := exec.Command("docker", "info").Run(); err != nil {
+		return fmt.Errorf("Docker is not running. Start Docker Desktop and retry")
+	}
+
 	cmd := exec.Command("docker", "compose", "up", "-d")
-	cmd.Dir = vaultPath
+	cmd.Dir = composeDir()
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("docker compose up: %w", err)
 	}
 
-	// Wait for health (up to 30s).
+	// Wait for health via Go HTTP (no curl dependency).
+	client := &http.Client{Timeout: 2 * time.Second}
 	for i := 0; i < 30; i++ {
-		resp, err := exec.Command("curl", "-sf", "http://127.0.0.1:7700/health").Output()
-		if err == nil && len(resp) > 0 {
-			return nil
+		resp, err := client.Get("http://127.0.0.1:7700/health")
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				return nil
+			}
 		}
 		time.Sleep(time.Second)
 	}
@@ -263,7 +277,7 @@ func StartMeilisearch(vaultPath string) error {
 // StopMeilisearch runs docker compose down.
 func StopMeilisearch(vaultPath string) error {
 	cmd := exec.Command("docker", "compose", "down")
-	cmd.Dir = vaultPath
+	cmd.Dir = composeDir()
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -296,7 +310,7 @@ func (d *Daemon) setupLogging() {
 	multi := io.MultiWriter(os.Stdout, f)
 	log.SetOutput(multi)
 
-	// Set up structured JSON logger for the file (queryable).
-	jsonHandler := slog.NewJSONHandler(f, &slog.HandlerOptions{Level: slog.LevelInfo})
+	// Set up structured JSON logger writing to both stdout and file.
+	jsonHandler := slog.NewJSONHandler(multi, &slog.HandlerOptions{Level: slog.LevelInfo})
 	slog.SetDefault(slog.New(jsonHandler))
 }
