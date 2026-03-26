@@ -168,10 +168,14 @@ func (r *Runner) Instruct(ctx context.Context, prompt string, result any, opts .
 				langsmith.WithRunTreeClient(r.Tracer),
 			)
 		}
-		rt.SetInputs(map[string]any{
+		inputs := map[string]any{
 			"model":  defaultModel,
-			"prompt": truncateForTrace(prompt),
-		})
+			"prompt": prompt,
+		}
+		if cfg.systemPrompt != "" {
+			inputs["system_prompt"] = cfg.systemPrompt
+		}
+		rt.SetInputs(inputs)
 		rt.PostRun()
 	}
 
@@ -246,10 +250,14 @@ func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]b
 				langsmith.WithRunTreeClient(r.Tracer),
 			)
 		}
-		rt.SetInputs(map[string]any{
+		inputs := map[string]any{
 			"model":  defaultModel,
-			"prompt": truncateForTrace(prompt),
-		})
+			"prompt": prompt,
+		}
+		if cfg.systemPrompt != "" {
+			inputs["system_prompt"] = cfg.systemPrompt
+		}
+		rt.SetInputs(inputs)
 		rt.PostRun()
 	}
 
