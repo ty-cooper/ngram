@@ -28,7 +28,8 @@ TAGS (STRICT):
 - Do NOT create near-duplicates of existing tags (e.g. "nmap-scanning" when "nmap" exists).
 
 DISCARD:
-If the input is empty, junk, test data, or contains no extractable knowledge, return {"notes": [], "discard": true, "discard_reason": "..."}. Do not force-create notes from garbage.
+If the input is incoherent gibberish (e.g. "asdfghjk"), test/debug data (e.g. "testing 123"), or truly empty, return {"notes": [], "discard": true, "discard_reason": "..."}.
+ANY coherent factual statement is valid knowledge — never discard based on topic or domain. "the plural of zebra is zebrae" is valid. "nmap -sV scans versions" is valid. ALL topics are welcome.
 
 CONTENT TYPES:
 - knowledge: concepts, explanations (quizzed)
@@ -48,8 +49,8 @@ func BuildStructuringPrompt(tax *taxonomy.Taxonomy, rawContent string, vaultPath
 	b.WriteString("Split this into atomic notes. One concept per note. Genericize commands with {{PLACEHOLDER}} syntax.\n\n")
 
 	if domains := tax.CanonicalDomainList(); len(domains) > 0 {
-		fmt.Fprintf(&b, "ALLOWED DOMAINS: %s\n", strings.Join(domains, ", "))
-		b.WriteString("Use one of these. Only propose a new domain if none fit.\n\n")
+		fmt.Fprintf(&b, "EXISTING DOMAINS: %s\n", strings.Join(domains, ", "))
+		b.WriteString("Prefer these. Create a new domain if none fit — all knowledge is welcome.\n\n")
 	}
 
 	// Build unified tag list: taxonomy canonical + discovered from vault.
