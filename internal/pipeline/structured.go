@@ -158,24 +158,9 @@ func deriveTitle(body string) string {
 	return line
 }
 
-// BuildFrontmatter generates minimal top frontmatter (timestamps only — for pipeline).
-func BuildFrontmatter(n *ProcessedNote) string {
-	var b strings.Builder
-	b.WriteString("---\n")
-	fmt.Fprintf(&b, "id: %s\n", n.ID)
-	fmt.Fprintf(&b, "created: %s\n", n.Created.UTC().Format(time.RFC3339))
-	fmt.Fprintf(&b, "modified: %s\n", n.Created.UTC().Format(time.RFC3339))
-	b.WriteString("---\n")
-	return b.String()
-}
-
-// BuildNoteContent returns Zettelkasten markdown: minimal frontmatter, content first, metadata footer.
+// BuildNoteContent returns Zettelkasten markdown: content first, all metadata in footer.
 func BuildNoteContent(n *ProcessedNote) string {
 	var b strings.Builder
-
-	// --- Minimal frontmatter (machine-readable) ---
-	b.WriteString(BuildFrontmatter(n))
-	b.WriteString("\n")
 
 	// --- Content (the idea) ---
 	fmt.Fprintf(&b, "# %s\n\n", n.Title)
@@ -222,6 +207,8 @@ func BuildNoteContent(n *ProcessedNote) string {
 	// --- Metadata footer ---
 	b.WriteString("\n---\n")
 	fmt.Fprintf(&b, "id: %s\n", n.ID)
+	fmt.Fprintf(&b, "created: %s\n", n.Created.UTC().Format(time.RFC3339))
+	fmt.Fprintf(&b, "modified: %s\n", n.Created.UTC().Format(time.RFC3339))
 	fmt.Fprintf(&b, "type: %s\n", n.ContentType)
 	if n.Domain != "" {
 		fmt.Fprintf(&b, "domain: %s\n", n.Domain)
