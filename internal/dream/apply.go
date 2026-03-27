@@ -11,7 +11,7 @@ import (
 )
 
 func (r *Runner) Apply(report *Report) error {
-	if len(report.Merges) == 0 && len(report.Archives) == 0 && len(report.Reclusters) == 0 && len(report.Retags) == 0 {
+	if len(report.Merges) == 0 && len(report.Archives) == 0 && len(report.Reclusters) == 0 && len(report.Retags) == 0 && len(report.Reformats) == 0 {
 		log.Println("dream: vault is clean, nothing to do")
 		return nil
 	}
@@ -54,6 +54,16 @@ func (r *Runner) Apply(report *Report) error {
 		}
 		r.git("add", "-A")
 		r.git("commit", "-m", fmt.Sprintf("dream: recluster → %s — %s", rc.NewCluster, rc.Reason))
+	}
+
+	// Apply reformats.
+	for _, rf := range report.Reformats {
+		if err := r.applyReformat(rf); err != nil {
+			log.Printf("dream: reformat %v failed: %v", rf.NoteIDs, err)
+			continue
+		}
+		r.git("add", "-A")
+		r.git("commit", "-m", fmt.Sprintf("dream: reformat %s — %s", strings.Join(rf.NoteIDs, ", "), rf.Reason))
 	}
 
 	// Check if there are any commits on this branch beyond main.
@@ -166,6 +176,33 @@ func (r *Runner) applyRecluster(rc Action) error {
 	})
 }
 
+func (r *Runner) applyReformat(rf Action) error {
+	if len(rf.NoteIDs) == 0 || rf.MergedBody == "" {
+		return fmt.Errorf("invalid reformat action")
+	}
+
+	path := r.findNoteByID(rf.NoteIDs[0])
+	if path == "" {
+		return fmt.Errorf("note %s not found", rf.NoteIDs[0])
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	content := string(data)
+	if strings.HasPrefix(content, "---\n") {
+		if idx := strings.Index(content[4:], "\n---\n"); idx >= 0 {
+			fm := content[:idx+4+5] // frontmatter including closing ---
+			newContent := fm + "\n" + rf.MergedBody + "\n"
+			return os.WriteFile(path, []byte(newContent), 0o644)
+		}
+	}
+
+	return os.WriteFile(path, []byte(rf.MergedBody), 0o644)
+}
+
 func (r *Runner) findNoteByID(id string) string {
 	var found string
 	filepath.Walk(filepath.Join(r.VaultPath, "knowledge"), func(path string, info os.FileInfo, err error) error {
@@ -251,6 +288,14 @@ func (r *Runner) createPR(report *Report, branch string) {
 		body += fmt.Sprintf("### Taxonomy (%d)\n", len(report.Reclusters))
 		for _, rc := range report.Reclusters {
 			body += fmt.Sprintf("- → %s — %s\n", rc.NewCluster, rc.Reason)
+		}
+		body += "\n"
+	}
+
+	if len(report.Reformats) > 0 {
+		body += fmt.Sprintf("### Reformats (%d)\n", len(report.Reformats))
+		for _, rf := range report.Reformats {
+			body += fmt.Sprintf("- %s — %s\n", strings.Join(rf.NoteIDs, ", "), rf.Reason)
 		}
 		body += "\n"
 	}

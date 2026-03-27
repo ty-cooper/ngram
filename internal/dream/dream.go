@@ -16,7 +16,7 @@ import (
 )
 
 type Action struct {
-	Type        string   `json:"type" jsonschema:"description=Action type,enum=merge,enum=archive,enum=recluster,enum=retag,enum=nothing,required=true"`
+	Type        string   `json:"type" jsonschema:"description=Action type,enum=merge,enum=archive,enum=recluster,enum=retag,enum=reformat,enum=nothing,required=true"`
 	NoteIDs     []string `json:"note_ids" jsonschema:"description=IDs of notes affected"`
 	Reason      string   `json:"reason" jsonschema:"description=Why this action is proposed,required=true"`
 	MergedTitle string   `json:"merged_title,omitempty" jsonschema:"description=Title for merged note"`
@@ -32,6 +32,8 @@ type Report struct {
 	Archives   []Action `json:"archives"`
 	Reclusters []Action `json:"reclusters"`
 	Retags     []Action `json:"retags"`
+	Reformats  []Action `json:"reformats"`
+	LintIssues int      `json:"lint_issues"`
 	Reviewed   int      `json:"reviewed"`
 	NoAction   int      `json:"no_action"`
 }
@@ -117,7 +119,23 @@ func (r *Runner) Run(ctx context.Context) (*Report, error) {
 		}
 	}
 
-	// 4. Cluster pass — detect near-synonym clusters.
+	// 4. Lint pass — local pattern checks, no LLM.
+	lintResults := r.lintPass(notes)
+	report.LintIssues = len(lintResults)
+	if len(lintResults) > 0 {
+		log.Printf("dream: lint found %d notes with violations", len(lintResults))
+		for _, lr := range lintResults {
+			for _, v := range lr.Violations {
+				log.Printf("dream: lint [%s] %s — %s", lr.Note.ID, v.Rule, v.Message)
+			}
+		}
+
+		// 5. Reformat pass — LLM rewrites for fixable violations.
+		reformats := r.reformatPass(ctx, lintResults)
+		report.Reformats = append(report.Reformats, reformats...)
+	}
+
+	// 6. Cluster pass — detect near-synonym clusters.
 	clusters, err := r.clusterSweep(ctx, notes)
 	if err != nil {
 		log.Printf("dream: cluster pass error: %v", err)
@@ -130,7 +148,7 @@ func (r *Runner) Run(ctx context.Context) (*Report, error) {
 		r.reconcileIndex(allNotes)
 	}
 
-	report.NoAction = report.Reviewed - len(report.Merges) - len(report.Archives) - len(report.Reclusters) - len(report.Retags)
+	report.NoAction = report.Reviewed - len(report.Merges) - len(report.Archives) - len(report.Reclusters) - len(report.Retags) - len(report.Reformats)
 	if report.NoAction < 0 {
 		report.NoAction = 0
 	}
@@ -179,21 +197,37 @@ func (r *Runner) loadNotes() ([]noteEntry, error) {
 			if len(parts) == 2 {
 				fm := parts[0]
 				entry.Body = strings.TrimSpace(parts[1])
+				inTags := false
 				for _, line := range strings.Split(fm, "\n") {
-					line = strings.TrimSpace(line)
-					if strings.HasPrefix(line, "id: ") {
-						entry.ID = strings.Trim(strings.TrimPrefix(line, "id: "), "\"")
-					} else if strings.HasPrefix(line, "title: ") {
-						entry.Title = strings.Trim(strings.TrimPrefix(line, "title: "), "\"")
-					} else if strings.HasPrefix(line, "domain: ") {
-						entry.Domain = strings.Trim(strings.TrimPrefix(line, "domain: "), "\"")
-					} else if strings.HasPrefix(line, "topic_cluster: ") {
-						entry.Cluster = strings.Trim(strings.TrimPrefix(line, "topic_cluster: "), "\"")
-					} else if strings.HasPrefix(line, "modified: ") {
-						val := strings.Trim(strings.TrimPrefix(line, "modified: "), "\"")
+					trimmed := strings.TrimSpace(line)
+					if strings.HasPrefix(trimmed, "id: ") {
+						entry.ID = strings.Trim(strings.TrimPrefix(trimmed, "id: "), "\"")
+						inTags = false
+					} else if strings.HasPrefix(trimmed, "title: ") {
+						entry.Title = strings.Trim(strings.TrimPrefix(trimmed, "title: "), "\"")
+						inTags = false
+					} else if strings.HasPrefix(trimmed, "domain: ") {
+						entry.Domain = strings.Trim(strings.TrimPrefix(trimmed, "domain: "), "\"")
+						inTags = false
+					} else if strings.HasPrefix(trimmed, "topic_cluster: ") {
+						entry.Cluster = strings.Trim(strings.TrimPrefix(trimmed, "topic_cluster: "), "\"")
+						inTags = false
+					} else if strings.HasPrefix(trimmed, "modified: ") {
+						val := strings.Trim(strings.TrimPrefix(trimmed, "modified: "), "\"")
 						if t, err := time.Parse(time.RFC3339, val); err == nil {
 							entry.Modified = t
 						}
+						inTags = false
+					} else if trimmed == "tags:" {
+						inTags = true
+					} else if inTags && strings.HasPrefix(trimmed, "- ") {
+						tag := strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))
+						tag = strings.Trim(tag, "\"")
+						if tag != "" {
+							entry.Tags = append(entry.Tags, tag)
+						}
+					} else if inTags && !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") {
+						inTags = false
 					}
 				}
 			}
