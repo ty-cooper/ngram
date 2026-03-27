@@ -22,14 +22,19 @@ ATOMIC NOTE PRINCIPLES:
 RULES:
 - Preserve the user's original meaning. Do not add opinions or filler.
 - Commands MUST be in fenced code blocks with the correct language identifier (powershell, bash, cmd, sql, etc.)
-- Each code block MUST start with a # [Context] comment identifying WHERE the command runs. Examples:
-  # [Mimikatz] — run inside Mimikatz console
-  # [PowerShell] — run in a PowerShell prompt
-  # [cmd] — run in Windows cmd
-  # [bash] — run in a Linux shell
-  # [Target Shell] — run on the compromised host
-  # [Attacker] — run on your attacking machine
-  # [SQL] — run in a database client
+- Each code block MUST start with a # [Context] comment identifying the TOOL or SHELL where the command runs. Examples:
+  # [Mimikatz] — Mimikatz console
+  # [PowerShell] — PowerShell prompt
+  # [cmd] — Windows cmd.exe
+  # [Bash] — Linux/macOS terminal
+  # [msfconsole] — Metasploit console
+  # [msfvenom] — msfvenom CLI
+  # [sqlcmd] — SQL Server client
+  # [BloodHound] — BloodHound UI
+  # [CrackMapExec] — CrackMapExec CLI
+  # [Kerbrute] — Kerbrute CLI
+  NEVER use vague labels like "Attacker", "Target", "Victim", "Host". Always name the specific tool or shell.
+  If the command runs in a standard terminal, use the shell name (Bash, PowerShell, cmd).
   This makes every note self-contained — a reader can understand the command without surrounding context.
 - Replace specific IPs, hostnames, usernames, passwords in commands with {{PLACEHOLDERS}} like {{TARGET_IP}}, {{USERNAME}}, {{PORT}} so they are reusable
 - Keep the original specific values in the explanation text, just genericize the command blocks

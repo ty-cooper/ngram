@@ -58,8 +58,9 @@ VIOLATIONS TO FIX:
 %s
 
 RULES:
-- Code blocks MUST start with a # [Tool/Context] comment (e.g. # [Mimikatz], # [PowerShell], # [Bash], # [Target Shell])
-- If a code block's tool/context is ambiguous, infer from the commands used
+- Code blocks MUST start with a # [Tool/Shell] comment naming the specific tool or shell (e.g. # [Mimikatz], # [PowerShell], # [Bash], # [msfvenom], # [CrackMapExec])
+- NEVER use vague labels like "Attacker", "Target", "Victim", "Host" — always name the specific tool or shell
+- If a code block's tool is ambiguous, infer from the commands used
 - Remove any tag that duplicates the domain name
 - Remove system tags: inbox, test, log, capture-session
 - Do not change the length of the note — preserve all content
