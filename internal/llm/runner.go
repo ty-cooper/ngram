@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/567-labs/instructor-go/pkg/instructor"
 	anthropic "github.com/liushuangls/go-anthropic/v2"
@@ -24,10 +23,7 @@ var (
 	ErrAuthExpired = errors.New("anthropic API key missing or invalid")
 )
 
-const (
-	defaultModel  = "claude-sonnet-4-6"
-	callTimeout   = 180 * time.Second // Max time per LLM call
-)
+const defaultModel = "claude-sonnet-4-6"
 
 // Usage tracks token consumption from the last API call.
 type Usage struct {
@@ -137,10 +133,6 @@ func (r *Runner) Instruct(ctx context.Context, prompt string, result any, opts .
 		o(cfg)
 	}
 
-	// Enforce call timeout.
-	ctx, cancel := context.WithTimeout(ctx, callTimeout)
-	defer cancel()
-
 	content := buildMessageContent(prompt, cfg.images)
 
 	req := anthropic.MessagesRequest{
@@ -218,10 +210,6 @@ func (r *Runner) Run(ctx context.Context, prompt string, opts ...RunOption) ([]b
 	for _, o := range opts {
 		o(cfg)
 	}
-
-	// Enforce call timeout.
-	ctx, cancel := context.WithTimeout(ctx, callTimeout)
-	defer cancel()
 
 	content := buildMessageContent(prompt, cfg.images)
 
