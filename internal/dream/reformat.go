@@ -62,7 +62,7 @@ RULES:
 - If a code block's tool/context is ambiguous, infer from the commands used
 - Remove any tag that duplicates the domain name
 - Remove system tags: inbox, test, log, capture-session
-- Keep the note under 500 words if possible — if the note is too long, split into the most important atomic concept and note what was removed
+- Do not change the length of the note — preserve all content
 - Preserve all code blocks, commands, and technical details exactly
 - Use {{PLACEHOLDER}} syntax for variable values in commands
 
@@ -96,7 +96,6 @@ Return ONLY the rewritten note body (markdown). No JSON wrapper.`, strings.Join(
 // fixableRules are violations the LLM can actually fix by rewriting.
 var fixableRules = map[string]bool{
 	"missing-context-comment": true,
-	"over-word-limit":         true,
 	"domain-as-tag":           true,
 	"system-tag":              true,
 	"near-duplicate-tag":      true,

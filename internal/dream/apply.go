@@ -11,7 +11,7 @@ import (
 )
 
 func (r *Runner) Apply(report *Report) error {
-	if len(report.Merges) == 0 && len(report.Archives) == 0 && len(report.Reclusters) == 0 && len(report.Retags) == 0 && len(report.Reformats) == 0 {
+	if len(report.Merges) == 0 && len(report.Archives) == 0 && len(report.Reclusters) == 0 && len(report.Retags) == 0 && len(report.Reformats) == 0 && len(report.Splits) == 0 {
 		log.Println("dream: vault is clean, nothing to do")
 		return nil
 	}
@@ -64,6 +64,16 @@ func (r *Runner) Apply(report *Report) error {
 		}
 		r.git("add", "-A")
 		r.git("commit", "-m", fmt.Sprintf("dream: reformat %s — %s", strings.Join(rf.NoteIDs, ", "), rf.Reason))
+	}
+
+	// Apply splits.
+	for _, sp := range report.Splits {
+		if err := r.applySplit(sp); err != nil {
+			log.Printf("dream: split %v failed: %v", sp.NoteIDs, err)
+			continue
+		}
+		r.git("add", "-A")
+		r.git("commit", "-m", fmt.Sprintf("dream: split %s into %d atomic notes — %s", sp.NoteIDs[0], len(sp.SplitNotes), sp.Reason))
 	}
 
 	// Check if there are any commits on this branch beyond main.
@@ -176,6 +186,86 @@ func (r *Runner) applyRecluster(rc Action) error {
 	})
 }
 
+func (r *Runner) applySplit(sp Action) error {
+	if len(sp.NoteIDs) == 0 || len(sp.SplitNotes) < 2 {
+		return fmt.Errorf("invalid split action")
+	}
+
+	originalPath := r.findNoteByID(sp.NoteIDs[0])
+	if originalPath == "" {
+		return fmt.Errorf("note %s not found", sp.NoteIDs[0])
+	}
+
+	// Read original to extract footer metadata.
+	data, err := os.ReadFile(originalPath)
+	if err != nil {
+		return err
+	}
+	originalContent := string(data)
+
+	// Extract footer metadata lines (domain, tags, etc).
+	var footerLines []string
+	for _, line := range strings.Split(originalContent, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "id: ") ||
+			strings.HasPrefix(trimmed, "created: ") ||
+			strings.HasPrefix(trimmed, "modified: ") ||
+			strings.HasPrefix(trimmed, "type: ") ||
+			strings.HasPrefix(trimmed, "domain: ") ||
+			strings.HasPrefix(trimmed, "topic_cluster: ") ||
+			strings.HasPrefix(trimmed, "tags: ") ||
+			strings.HasPrefix(trimmed, "retention: ") {
+			footerLines = append(footerLines, line)
+		}
+	}
+
+	knowledgeDir := filepath.Dir(originalPath)
+	now := time.Now().UTC().Format(time.RFC3339)
+	var newIDs []string
+
+	// Write each split note.
+	for i, note := range sp.SplitNotes {
+		newID := generateID()
+		newIDs = append(newIDs, newID)
+
+		var content strings.Builder
+		content.WriteString(note.Body)
+		content.WriteString("\n\n---\n")
+		content.WriteString(fmt.Sprintf("id: %s\n", newID))
+		content.WriteString(fmt.Sprintf("created: %s\n", now))
+		content.WriteString(fmt.Sprintf("modified: %s\n", now))
+		content.WriteString(fmt.Sprintf("from: %s\n", sp.NoteIDs[0]))
+
+		// Copy domain/tags from original footer.
+		for _, fl := range footerLines {
+			trimmed := strings.TrimSpace(fl)
+			if strings.HasPrefix(trimmed, "domain: ") ||
+				strings.HasPrefix(trimmed, "topic_cluster: ") ||
+				strings.HasPrefix(trimmed, "tags: ") ||
+				strings.HasPrefix(trimmed, "type: ") {
+				content.WriteString(fl + "\n")
+			}
+		}
+
+		slug := slugify(note.Title)
+		filename := fmt.Sprintf("%s-%s.md", newID, slug)
+		dest := filepath.Join(knowledgeDir, filename)
+
+		if i == 0 {
+			// First note replaces the original file.
+			if err := os.WriteFile(originalPath, []byte(content.String()), 0o644); err != nil {
+				return err
+			}
+		} else {
+			if err := os.WriteFile(dest, []byte(content.String()), 0o644); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (r *Runner) applyReformat(rf Action) error {
 	if len(rf.NoteIDs) == 0 || rf.MergedBody == "" {
 		return fmt.Errorf("invalid reformat action")
@@ -201,6 +291,28 @@ func (r *Runner) applyReformat(rf Action) error {
 	}
 
 	return os.WriteFile(path, []byte(rf.MergedBody), 0o644)
+}
+
+func slugify(s string) string {
+	s = strings.ToLower(s)
+	s = strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			return r
+		}
+		if r == ' ' || r == '_' || r == '/' {
+			return '-'
+		}
+		return -1
+	}, s)
+	// Collapse multiple dashes.
+	for strings.Contains(s, "--") {
+		s = strings.ReplaceAll(s, "--", "-")
+	}
+	s = strings.Trim(s, "-")
+	if len(s) > 60 {
+		s = s[:60]
+	}
+	return s
 }
 
 func (r *Runner) findNoteByID(id string) string {
@@ -288,6 +400,14 @@ func (r *Runner) createPR(report *Report, branch string) {
 		body += fmt.Sprintf("### Taxonomy (%d)\n", len(report.Reclusters))
 		for _, rc := range report.Reclusters {
 			body += fmt.Sprintf("- → %s — %s\n", rc.NewCluster, rc.Reason)
+		}
+		body += "\n"
+	}
+
+	if len(report.Splits) > 0 {
+		body += fmt.Sprintf("### Splits (%d)\n", len(report.Splits))
+		for _, sp := range report.Splits {
+			body += fmt.Sprintf("- %s → %d atomic notes — %s\n", sp.NoteIDs[0], len(sp.SplitNotes), sp.Reason)
 		}
 		body += "\n"
 	}

@@ -16,14 +16,15 @@ import (
 )
 
 type Action struct {
-	Type        string   `json:"type" jsonschema:"description=Action type,enum=merge,enum=archive,enum=recluster,enum=retag,enum=reformat,enum=nothing,required=true"`
-	NoteIDs     []string `json:"note_ids" jsonschema:"description=IDs of notes affected"`
-	Reason      string   `json:"reason" jsonschema:"description=Why this action is proposed,required=true"`
-	MergedTitle string   `json:"merged_title,omitempty" jsonschema:"description=Title for merged note"`
-	MergedBody  string   `json:"merged_body,omitempty" jsonschema:"description=Body for merged note"`
-	OldClusters []string `json:"old_clusters,omitempty" jsonschema:"description=Clusters being replaced"`
-	NewCluster  string   `json:"new_cluster,omitempty" jsonschema:"description=Target cluster name"`
-	NewTags     []string `json:"new_tags,omitempty" jsonschema:"description=New tags to apply"`
+	Type        string      `json:"type" jsonschema:"description=Action type,enum=merge,enum=archive,enum=recluster,enum=retag,enum=reformat,enum=split,enum=nothing,required=true"`
+	NoteIDs     []string    `json:"note_ids" jsonschema:"description=IDs of notes affected"`
+	Reason      string      `json:"reason" jsonschema:"description=Why this action is proposed,required=true"`
+	MergedTitle string      `json:"merged_title,omitempty" jsonschema:"description=Title for merged note"`
+	MergedBody  string      `json:"merged_body,omitempty" jsonschema:"description=Body for merged note"`
+	OldClusters []string    `json:"old_clusters,omitempty" jsonschema:"description=Clusters being replaced"`
+	NewCluster  string      `json:"new_cluster,omitempty" jsonschema:"description=Target cluster name"`
+	NewTags     []string    `json:"new_tags,omitempty" jsonschema:"description=New tags to apply"`
+	SplitNotes  []SplitNote `json:"split_notes,omitempty" jsonschema:"description=Atomic notes from a split operation"`
 }
 
 type Report struct {
@@ -33,6 +34,7 @@ type Report struct {
 	Reclusters []Action `json:"reclusters"`
 	Retags     []Action `json:"retags"`
 	Reformats  []Action `json:"reformats"`
+	Splits     []Action `json:"splits"`
 	LintIssues int      `json:"lint_issues"`
 	Reviewed   int      `json:"reviewed"`
 	NoAction   int      `json:"no_action"`
@@ -133,6 +135,10 @@ func (r *Runner) Run(ctx context.Context) (*Report, error) {
 		// 5. Reformat pass — LLM rewrites for fixable violations.
 		reformats := r.reformatPass(ctx, lintResults)
 		report.Reformats = append(report.Reformats, reformats...)
+
+		// 5b. Split pass — LLM splits oversized notes into atomic pieces.
+		splits := r.splitPass(ctx, lintResults)
+		report.Splits = append(report.Splits, splits...)
 	}
 
 	// 6. Cluster pass — detect near-synonym clusters.
@@ -148,7 +154,7 @@ func (r *Runner) Run(ctx context.Context) (*Report, error) {
 		r.reconcileIndex(allNotes)
 	}
 
-	report.NoAction = report.Reviewed - len(report.Merges) - len(report.Archives) - len(report.Reclusters) - len(report.Retags) - len(report.Reformats)
+	report.NoAction = report.Reviewed - len(report.Merges) - len(report.Archives) - len(report.Reclusters) - len(report.Retags) - len(report.Reformats) - len(report.Splits)
 	if report.NoAction < 0 {
 		report.NoAction = 0
 	}
