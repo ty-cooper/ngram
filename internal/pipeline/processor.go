@@ -118,9 +118,22 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 		notes = append(notes, chunkNotes...)
 	}
 	if len(notes) == 0 {
-		log.Printf("ngram: discarded — no notes extracted from any chunk")
-		if archErr := p.archiveRaw(procPath); archErr != nil {
-			log.Printf("warn: archive discarded: %v", archErr)
+		// Log what was lost.
+		preview := string(raw)
+		if len(preview) > 200 {
+			preview = preview[:200] + "..."
+		}
+		log.Printf("ngram: all chunks failed for %s — moving to _revisit/. Preview: %s", filepath.Base(procPath), preview)
+
+		// Move to _revisit/ for manual retry instead of discarding.
+		revisitDir := filepath.Join(p.VaultPath, "_revisit")
+		os.MkdirAll(revisitDir, 0o755)
+		dest := filepath.Join(revisitDir, filepath.Base(procPath))
+		if err := os.Rename(procPath, dest); err != nil {
+			log.Printf("warn: move to revisit failed: %v, falling back to archive", err)
+			if archErr := p.archiveRaw(procPath); archErr != nil {
+				log.Printf("warn: archive failed: %v", archErr)
+			}
 		}
 		return nil
 	}
@@ -413,8 +426,8 @@ func (p *Processor) processImage(ctx context.Context, inboxPath string, start ti
 	notes, err := ValidateResponse(&resp)
 	if err != nil {
 		if errors.Is(err, ErrDiscard) {
-			log.Printf("ngram: image discarded — %v", err)
-			return p.archiveRaw(procPath)
+			log.Printf("ngram: image discarded — %v, moving to _revisit/", err)
+			return p.moveToRevisit(procPath)
 		}
 		return fmt.Errorf("validate image: %w", err)
 	}
@@ -615,6 +628,15 @@ func (p *Processor) archiveRaw(processingPath string) error {
 		return err
 	}
 	dest := filepath.Join(archiveDir, filepath.Base(processingPath))
+	return os.Rename(processingPath, dest)
+}
+
+func (p *Processor) moveToRevisit(processingPath string) error {
+	revisitDir := filepath.Join(p.VaultPath, "_revisit")
+	if err := vault.EnsureDir(revisitDir); err != nil {
+		return err
+	}
+	dest := filepath.Join(revisitDir, filepath.Base(processingPath))
 	return os.Rename(processingPath, dest)
 }
 
