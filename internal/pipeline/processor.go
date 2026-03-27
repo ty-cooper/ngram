@@ -23,7 +23,7 @@ import (
 	"github.com/ty-cooper/ngram/internal/vault"
 )
 
-const chunkSizeBytes = 20 * 1024 // 20KB — split large inputs into chunks at paragraph boundaries
+const chunkSizeBytes = 10 * 1024 // 10KB — split large inputs into chunks at paragraph boundaries
 
 // gitMu serializes all git operations to prevent index.lock conflicts.
 var gitMu sync.Mutex
@@ -113,7 +113,9 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 				log.Printf("warn: chunk %d/%d failed: %v, skipping", i+1, len(chunks), err)
 				continue
 			}
-			return fmt.Errorf("structure: %w", err)
+			// Single chunk failed — move to _revisit/ instead of leaving in _processing/.
+			log.Printf("error: process %s: %v", filepath.Base(procPath), err)
+			return p.moveToRevisit(procPath)
 		}
 		notes = append(notes, chunkNotes...)
 	}
