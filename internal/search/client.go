@@ -8,7 +8,10 @@ import (
 	"github.com/meilisearch/meilisearch-go"
 )
 
-const indexName = "notes"
+const (
+	indexName    = "notes"
+	cmdIndexName = "commands"
+)
 
 // EmbedderConfig holds settings for configuring Meilisearch's built-in embedder.
 type EmbedderConfig struct {
@@ -21,6 +24,7 @@ type EmbedderConfig struct {
 type Client struct {
 	ms             meilisearch.ServiceManager
 	index          meilisearch.IndexManager
+	cmdIndex       meilisearch.IndexManager
 	hybridEnabled  bool
 }
 
@@ -31,7 +35,8 @@ func New(host, apiKey string) (*Client, error) {
 	}
 	ms := meilisearch.New(host, meilisearch.WithAPIKey(apiKey))
 	idx := ms.Index(indexName)
-	return &Client{ms: ms, index: idx}, nil
+	cmdIdx := ms.Index(cmdIndexName)
+	return &Client{ms: ms, index: idx, cmdIndex: cmdIdx}, nil
 }
 
 // EnsureIndex creates the notes index if it doesn't exist and configures
@@ -96,6 +101,165 @@ func (c *Client) EnsureIndex() error {
 	})
 	if err != nil {
 		return fmt.Errorf("set sortable attributes: %w", err)
+	}
+	return c.waitForTask(task.TaskUID)
+}
+
+// EnsureCommandsIndex creates the commands index with appropriate settings.
+func (c *Client) EnsureCommandsIndex() error {
+	_, err := c.ms.CreateIndex(&meilisearch.IndexConfig{
+		Uid:        cmdIndexName,
+		PrimaryKey: "id",
+	})
+	if err != nil {
+		// May already exist.
+	}
+
+	task, err := c.cmdIndex.UpdateSearchableAttributes(&[]string{
+		"command",
+		"description",
+		"tool",
+		"parent_title",
+	})
+	if err != nil {
+		return fmt.Errorf("set command searchable attributes: %w", err)
+	}
+	if err := c.waitForTask(task.TaskUID); err != nil {
+		return err
+	}
+
+	filterAttrs := []interface{}{
+		"tool",
+		"language",
+		"phase",
+		"domain",
+		"tags",
+		"parent_note_id",
+	}
+	task, err = c.cmdIndex.UpdateFilterableAttributes(&filterAttrs)
+	if err != nil {
+		return fmt.Errorf("set command filterable attributes: %w", err)
+	}
+	if err := c.waitForTask(task.TaskUID); err != nil {
+		return err
+	}
+
+	// Enable facets for the info modal.
+	task, err = c.cmdIndex.UpdateSortableAttributes(&[]string{
+		"tool",
+		"phase",
+	})
+	if err != nil {
+		return fmt.Errorf("set command sortable attributes: %w", err)
+	}
+	return c.waitForTask(task.TaskUID)
+}
+
+// IndexCommands upserts a batch of command documents.
+func (c *Client) IndexCommands(docs []CommandDocument) error {
+	if len(docs) == 0 {
+		return nil
+	}
+	pk := "id"
+	task, err := c.cmdIndex.AddDocuments(docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+	if err != nil {
+		return fmt.Errorf("index commands: %w", err)
+	}
+	return c.waitForTask(task.TaskUID)
+}
+
+// SearchCommands queries the commands index with optional filters.
+func (c *Client) SearchCommands(query string, filters []string, limit int) ([]CommandDocument, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+
+	req := &meilisearch.SearchRequest{
+		Limit: int64(limit),
+	}
+
+	if len(filters) > 0 {
+		combined := ""
+		for i, f := range filters {
+			if i > 0 {
+				combined += " AND "
+			}
+			combined += f
+		}
+		req.Filter = combined
+	}
+
+	resp, err := c.cmdIndex.Search(query, req)
+	if err != nil {
+		return nil, fmt.Errorf("search commands: %w", err)
+	}
+
+	var results []CommandDocument
+	for _, hit := range resp.Hits {
+		raw, err := json.Marshal(hit)
+		if err != nil {
+			continue
+		}
+		var doc CommandDocument
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			continue
+		}
+		results = append(results, doc)
+	}
+	return results, nil
+}
+
+// parseFacets extracts facet values from a raw JSON FacetDistribution response.
+func parseFacets(raw json.RawMessage, fields []string) map[string][]string {
+	result := make(map[string][]string)
+	if len(raw) == 0 {
+		return result
+	}
+	var dist map[string]map[string]int
+	if err := json.Unmarshal(raw, &dist); err != nil {
+		return result
+	}
+	for _, field := range fields {
+		if counts, ok := dist[field]; ok {
+			for val := range counts {
+				result[field] = append(result[field], val)
+			}
+		}
+	}
+	return result
+}
+
+// CommandFacets returns distinct values for faceted fields in the commands index.
+func (c *Client) CommandFacets() (map[string][]string, error) {
+	fields := []string{"tool", "phase", "domain", "tags", "language"}
+	resp, err := c.cmdIndex.Search("", &meilisearch.SearchRequest{
+		Facets: fields,
+		Limit:  0,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return parseFacets(resp.FacetDistribution, fields), nil
+}
+
+// NotesFacets returns distinct values for faceted fields in the notes index.
+func (c *Client) NotesFacets() (map[string][]string, error) {
+	fields := []string{"domain", "phase", "tags", "tool", "content_type"}
+	resp, err := c.index.Search("", &meilisearch.SearchRequest{
+		Facets: fields,
+		Limit:  0,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return parseFacets(resp.FacetDistribution, fields), nil
+}
+
+// ClearCommandsIndex removes all documents from the commands index.
+func (c *Client) ClearCommandsIndex() error {
+	task, err := c.cmdIndex.DeleteAllDocuments(nil)
+	if err != nil {
+		return err
 	}
 	return c.waitForTask(task.TaskUID)
 }
