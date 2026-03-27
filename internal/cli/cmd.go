@@ -5,8 +5,19 @@ import (
 	"sort"
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 	"github.com/ty-cooper/ngram/internal/search"
+)
+
+var (
+	cmdToolStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
+	cmdDescStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	cmdCodeStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("114"))
+	cmdFromStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Italic(true)
+	cmdSepStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+	cmdLangStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	cmdCountStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
 )
 
 var cmdCmd = &cobra.Command{
@@ -76,19 +87,38 @@ func cmdRun(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	fmt.Println(cmdCountStyle.Render(fmt.Sprintf("%d commands found", len(results))))
+	fmt.Println()
+
 	for i, r := range results {
 		if i > 0 {
-			fmt.Println("---")
+			fmt.Println(cmdSepStyle.Render("  ─────────────────────────────────────────"))
 		}
-		fmt.Printf("[%s] %s\n", r.Tool, r.Description)
+
+		// Tool + description header.
+		header := cmdToolStyle.Render(fmt.Sprintf("  [%s]", r.Tool))
+		if r.Description != "" {
+			header += " " + cmdDescStyle.Render(r.Description)
+		}
+		fmt.Println(header)
+
+		// Language tag.
 		if r.Language != "" {
-			fmt.Printf("```%s\n%s\n```\n", r.Language, r.Command)
-		} else {
-			fmt.Printf("```\n%s\n```\n", r.Command)
+			fmt.Println(cmdLangStyle.Render(fmt.Sprintf("  %s", r.Language)))
 		}
-		fmt.Printf("  from: %s\n", r.ParentTitle)
+
+		// Command body — indent each line.
+		fmt.Println()
+		for _, line := range strings.Split(r.Command, "\n") {
+			fmt.Println("    " + cmdCodeStyle.Render(line))
+		}
+		fmt.Println()
+
+		// Source note.
+		fmt.Println(cmdFromStyle.Render(fmt.Sprintf("  ← %s", r.ParentTitle)))
 	}
 
+	fmt.Println()
 	return nil
 }
 
