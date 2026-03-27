@@ -236,6 +236,28 @@ func (r *Runner) loadNotes() ([]noteEntry, error) {
 		if entry.Body == "" {
 			entry.Body = strings.TrimSpace(content)
 		}
+
+		// Parse footer metadata (id:, domain:, tags: #foo #bar).
+		if len(entry.Tags) == 0 || entry.Domain == "" || entry.ID == "" {
+			for _, line := range strings.Split(content, "\n") {
+				trimmed := strings.TrimSpace(line)
+				if entry.ID == "" && strings.HasPrefix(trimmed, "id: ") {
+					entry.ID = strings.Trim(strings.TrimPrefix(trimmed, "id: "), "\"")
+				}
+				if entry.Domain == "" && strings.HasPrefix(trimmed, "domain: ") {
+					entry.Domain = strings.Trim(strings.TrimPrefix(trimmed, "domain: "), "\"")
+				}
+				if len(entry.Tags) == 0 && strings.HasPrefix(trimmed, "tags: ") {
+					tagStr := strings.TrimPrefix(trimmed, "tags: ")
+					for _, t := range strings.Fields(tagStr) {
+						t = strings.TrimPrefix(t, "#")
+						if t != "" {
+							entry.Tags = append(entry.Tags, t)
+						}
+					}
+				}
+			}
+		}
 		if entry.ID == "" {
 			entry.ID = strings.TrimSuffix(filepath.Base(path), ".md")
 		}
