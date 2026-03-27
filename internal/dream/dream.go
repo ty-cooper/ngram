@@ -232,6 +232,10 @@ func (r *Runner) loadNotes() ([]noteEntry, error) {
 				}
 			}
 		}
+		// Handle notes without frontmatter — body is the full content.
+		if entry.Body == "" {
+			entry.Body = strings.TrimSpace(content)
+		}
 		if entry.ID == "" {
 			entry.ID = strings.TrimSuffix(filepath.Base(path), ".md")
 		}
@@ -335,6 +339,11 @@ or
 func (r *Runner) qualitySweep(ctx context.Context, notes []noteEntry) ([]Action, error) {
 	var actions []Action
 	for _, note := range notes {
+		// Safety: never archive a note with substantial file size on disk.
+		if info, err := os.Stat(note.Path); err == nil && info.Size() > 100 {
+			continue
+		}
+
 		// Strip boilerplate to measure actual content.
 		content := stripNoteBoilerplate(note.Body, note.Title)
 		contentLen := len(strings.TrimSpace(content))
