@@ -26,7 +26,7 @@ var (
 
 const (
 	defaultModel  = "claude-sonnet-4-6"
-	callTimeout   = 90 * time.Second // Max time per LLM call
+	callTimeout   = 180 * time.Second // Max time per LLM call
 )
 
 // Usage tracks token consumption from the last API call.
