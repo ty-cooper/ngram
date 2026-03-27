@@ -121,9 +121,11 @@ func (w *Watcher) drainExisting(ctx context.Context, inboxDir string) {
 			continue
 		}
 		log.Printf("ngram: processing existing %s", e.Name())
-		if err := w.Processor.Process(ctx, p); err != nil {
+		noteCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		if err := w.Processor.Process(noteCtx, p); err != nil {
 			log.Printf("error: process %s: %v", e.Name(), err)
 		}
+		cancel()
 	}
 }
 
@@ -185,7 +187,10 @@ func (w *Watcher) debouncedWatch(ctx context.Context, watcher *fsnotify.Watcher)
 					go func(p string) {
 						w.sem <- struct{}{}        // acquire
 						defer func() { <-w.sem }() // release
-						if err := w.Processor.Process(ctx, p); err != nil {
+						// Per-note timeout: 5 minutes max per note.
+						noteCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+						defer cancel()
+						if err := w.Processor.Process(noteCtx, p); err != nil {
 							log.Printf("error: process %s: %v", filepath.Base(p), err)
 						}
 					}(path)
