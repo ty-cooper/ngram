@@ -22,7 +22,7 @@ import (
 	"github.com/ty-cooper/ngram/internal/vault"
 )
 
-const maxInputBytes = 100 * 1024 // 100KB — truncate text content beyond this
+const chunkSizeBytes = 20 * 1024 // 20KB — split large inputs into chunks at paragraph boundaries
 
 // gitMu serializes all git operations to prevent index.lock conflicts.
 var gitMu sync.Mutex
@@ -72,11 +72,6 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 	// 0. Git-commit raw inbox file before processing (crash safety).
 	p.gitCommitInbox(inboxPath)
 
-	// 0b. Check input size limit (100KB text).
-	if info, err := os.Stat(inboxPath); err == nil && info.Size() > maxInputBytes {
-		log.Printf("warn: %s exceeds %dKB limit (%d bytes), truncating", filepath.Base(inboxPath), maxInputBytes/1024, info.Size())
-	}
-
 	// 1. Move to _processing/.
 	procPath, err := p.moveToProcessing(inboxPath)
 	if err != nil {
@@ -87,9 +82,6 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 	raw, err := os.ReadFile(procPath)
 	if err != nil {
 		return fmt.Errorf("read raw: %w", err)
-	}
-	if len(raw) > maxInputBytes {
-		raw = raw[:maxInputBytes]
 	}
 	rawContent := string(raw)
 
@@ -103,22 +95,33 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 		return p.writeRawDirect(rawContent, procPath)
 	}
 
-	// 4-6. Structure with retry loop.
-	maxRetries := p.MaxRetries
-	if maxRetries == 0 {
-		maxRetries = 2
+	// 4. Chunk large inputs and structure each chunk.
+	chunks := chunkBody(body, chunkSizeBytes)
+	if len(chunks) > 1 {
+		log.Printf("ngram: large input (%d bytes), split into %d chunks", len(body), len(chunks))
 	}
 
-	notes, err := p.structureWithRetry(ctx, body, maxRetries)
-	if err != nil {
-		if errors.Is(err, ErrDiscard) {
-			log.Printf("ngram: discarded — %v", err)
-			if archErr := p.archiveRaw(procPath); archErr != nil {
-				log.Printf("warn: archive discarded: %v", archErr)
+	var notes []*StructuredNote
+	for i, chunk := range chunks {
+		chunkNotes, err := p.structureWithRetry(ctx, chunk, 2)
+		if err != nil {
+			if errors.Is(err, ErrDiscard) {
+				continue // skip empty chunks
 			}
-			return nil
+			if len(chunks) > 1 {
+				log.Printf("warn: chunk %d/%d failed: %v, skipping", i+1, len(chunks), err)
+				continue
+			}
+			return fmt.Errorf("structure: %w", err)
 		}
-		return fmt.Errorf("structure: %w", err)
+		notes = append(notes, chunkNotes...)
+	}
+	if len(notes) == 0 {
+		log.Printf("ngram: discarded — no notes extracted from any chunk")
+		if archErr := p.archiveRaw(procPath); archErr != nil {
+			log.Printf("warn: archive discarded: %v", archErr)
+		}
+		return nil
 	}
 
 	// Process each atomic note.
@@ -774,4 +777,32 @@ func stripCodeFences(data []byte) []byte {
 		s = bytes.TrimSpace(s)
 	}
 	return s
+}
+
+// chunkBody splits a large body into chunks at paragraph boundaries.
+// Returns a single-element slice if body is under maxBytes.
+func chunkBody(body string, maxBytes int) []string {
+	if len(body) <= maxBytes {
+		return []string{body}
+	}
+
+	var chunks []string
+	paragraphs := strings.Split(body, "\n\n")
+	var current strings.Builder
+
+	for _, para := range paragraphs {
+		if current.Len()+len(para)+2 > maxBytes && current.Len() > 0 {
+			chunks = append(chunks, strings.TrimSpace(current.String()))
+			current.Reset()
+		}
+		if current.Len() > 0 {
+			current.WriteString("\n\n")
+		}
+		current.WriteString(para)
+	}
+	if current.Len() > 0 {
+		chunks = append(chunks, strings.TrimSpace(current.String()))
+	}
+
+	return chunks
 }
