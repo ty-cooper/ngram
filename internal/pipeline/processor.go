@@ -15,6 +15,7 @@ import (
 	"time"
 
 	langsmith "github.com/ty-cooper/langsmith-go"
+	"github.com/ty-cooper/ngram/internal/capture"
 	"github.com/ty-cooper/ngram/internal/llm"
 	"github.com/ty-cooper/ngram/internal/notify"
 	"github.com/ty-cooper/ngram/internal/search"
@@ -144,6 +145,10 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 			case "appended":
 				log.Printf("ngram: dedup — appended to %s", result.TargetID)
 				p.gitCommit(result.TargetID, result.TargetID, "append")
+				continue
+			case "revisit":
+				log.Printf("ngram: dedup deferred — parking for revisit")
+				p.parkForRevisit(structured, source, box, phase)
 				continue
 			}
 		}
@@ -611,6 +616,52 @@ func (p *Processor) archiveRaw(processingPath string) error {
 	}
 	dest := filepath.Join(archiveDir, filepath.Base(processingPath))
 	return os.Rename(processingPath, dest)
+}
+
+// parkForRevisit writes a structured note to _revisit/ for later dedup processing.
+func (p *Processor) parkForRevisit(note *StructuredNote, source, box, phase string) {
+	revisitDir := filepath.Join(p.VaultPath, "_revisit")
+	vault.EnsureDir(revisitDir)
+
+	processed := &ProcessedNote{
+		StructuredNote: *note,
+		ID:             GenerateID(),
+		Source:         source,
+		Box:            box,
+		Phase:          phase,
+		Created:        time.Now(),
+	}
+
+	content := BuildNoteContent(processed)
+	filename := fmt.Sprintf("%s-%s.md", processed.ID, capture.Slugify(note.Title))
+	path := filepath.Join(revisitDir, filename)
+	atomicWrite(path, content)
+	log.Printf("ngram: parked %s in _revisit/", filename)
+}
+
+// DrainRevisit processes all notes in _revisit/ through dedup.
+// Called after inbox is fully drained.
+func (p *Processor) DrainRevisit(ctx context.Context) {
+	revisitDir := filepath.Join(p.VaultPath, "_revisit")
+	entries, err := os.ReadDir(revisitDir)
+	if err != nil || len(entries) == 0 {
+		return
+	}
+
+	log.Printf("ngram: processing %d revisit notes", len(entries))
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		path := filepath.Join(revisitDir, e.Name())
+		// Move back to inbox for full reprocessing (dedup will have capacity now).
+		inboxPath := filepath.Join(p.VaultPath, "_inbox", e.Name())
+		if err := os.Rename(path, inboxPath); err != nil {
+			log.Printf("warn: revisit move failed: %v", err)
+			continue
+		}
+		log.Printf("ngram: revisit → inbox: %s", e.Name())
+	}
 }
 
 func (p *Processor) logUsage(noteID, component string, durationMs int64) {

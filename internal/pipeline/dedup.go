@@ -76,8 +76,8 @@ func (d *Deduplicator) Check(ctx context.Context, note *StructuredNote, procPath
 	// may contain new information that should be appended.
 	decision, err := d.callMasterAgent(ctx, note, aboveThreshold)
 	if err != nil {
-		log.Printf("warn: dedup master agent failed: %v, defaulting to NEW", err)
-		return &DedupResult{Action: "proceed", Reason: "master agent failed"}
+		log.Printf("warn: dedup master agent failed: %v, deferring to revisit", err)
+		return &DedupResult{Action: "revisit", Reason: fmt.Sprintf("dedup deferred: %v", err)}
 	}
 
 	switch decision.Decision {

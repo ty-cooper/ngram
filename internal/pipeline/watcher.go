@@ -127,6 +127,9 @@ func (w *Watcher) drainExisting(ctx context.Context, inboxDir string) {
 		}
 		cancel()
 	}
+
+	// After inbox is drained, process any parked revisit notes.
+	w.Processor.DrainRevisit(ctx)
 }
 
 func (w *Watcher) debouncedWatch(ctx context.Context, watcher *fsnotify.Watcher) error {
