@@ -40,26 +40,25 @@ func ParseNoteFile(path, vaultPath string) (*NoteDocument, error) {
 
 	// Read frontmatter between --- delimiters.
 	var fmLines []string
-	inFrontmatter := false
-	bodyStart := false
 	var bodyLines []string
 
+	var allLines []string
 	for scanner.Scan() {
-		line := scanner.Text()
-		if !inFrontmatter && !bodyStart && strings.TrimSpace(line) == "---" {
-			inFrontmatter = true
-			continue
+		allLines = append(allLines, scanner.Text())
+	}
+
+	// Detect if file starts with frontmatter.
+	if len(allLines) > 0 && strings.TrimSpace(allLines[0]) == "---" {
+		for i := 1; i < len(allLines); i++ {
+			if strings.TrimSpace(allLines[i]) == "---" {
+				fmLines = allLines[1:i]
+				bodyLines = allLines[i+1:]
+				break
+			}
 		}
-		if inFrontmatter && strings.TrimSpace(line) == "---" {
-			inFrontmatter = false
-			bodyStart = true
-			continue
-		}
-		if inFrontmatter {
-			fmLines = append(fmLines, line)
-		} else if bodyStart {
-			bodyLines = append(bodyLines, line)
-		}
+	} else {
+		// No frontmatter — entire file is body + possible footer metadata.
+		bodyLines = allLines
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("scan %s: %w", path, err)
