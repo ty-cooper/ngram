@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	langsmith "github.com/ty-cooper/langsmith-go"
@@ -22,6 +23,9 @@ import (
 )
 
 const maxInputBytes = 100 * 1024 // 100KB — truncate text content beyond this
+
+// gitMu serializes all git operations to prevent index.lock conflicts.
+var gitMu sync.Mutex
 
 // Processor runs the structuring pipeline for notes in _inbox/.
 type Processor struct {
@@ -544,7 +548,9 @@ func (p *Processor) writeRawDirect(rawContent string, processingPath string) err
 }
 
 func (p *Processor) gitCommit(relPath, noteID, source string) {
-	// Skip if vault is not a git repo.
+	gitMu.Lock()
+	defer gitMu.Unlock()
+
 	check := exec.Command("git", "rev-parse", "--git-dir")
 	check.Dir = p.VaultPath
 	if err := check.Run(); err != nil {
@@ -553,7 +559,6 @@ func (p *Processor) gitCommit(relPath, noteID, source string) {
 
 	msg := fmt.Sprintf("ngram: structured %s from %s", noteID, source)
 
-	// Only stage the specific file — never use -A or . to prevent staging secrets.
 	add := exec.Command("git", "add", "--", relPath)
 	add.Dir = p.VaultPath
 	if err := add.Run(); err != nil {
@@ -570,6 +575,9 @@ func (p *Processor) gitCommit(relPath, noteID, source string) {
 
 // gitCommitInbox commits a raw inbox file on arrival for safety.
 func (p *Processor) gitCommitInbox(inboxPath string) {
+	gitMu.Lock()
+	defer gitMu.Unlock()
+
 	check := exec.Command("git", "rev-parse", "--git-dir")
 	check.Dir = p.VaultPath
 	if err := check.Run(); err != nil {
