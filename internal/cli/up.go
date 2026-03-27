@@ -55,8 +55,9 @@ func upRun(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Check if already running — exit cleanly so launchd doesn't restart loop.
+	// Check if already running — exit 0 so launchd doesn't restart loop.
 	if running, _ := daemon.IsRunning(c.VaultPath); running {
+		fmt.Println("ngram is already running. Use 'n down' to stop, or 'n status' to check health.")
 		return nil
 	}
 
