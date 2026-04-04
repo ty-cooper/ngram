@@ -1,5 +1,5 @@
 import { ItemView, MarkdownRenderer, Modal, WorkspaceLeaf, App } from "obsidian";
-import { MeilisearchClient, NoteResult, FacetValues } from "./MeilisearchClient";
+import { MeilisearchClient, NoteResult, CommandResult, FacetValues } from "./MeilisearchClient";
 
 export const VIEW_TYPE = "ngram-search-view";
 
@@ -124,6 +124,25 @@ export class SearchView extends ItemView {
         font-size: 14px;
         line-height: 1.6;
       }
+      .ngram-cmd-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+      .ngram-cmd-badge {
+        background: var(--interactive-accent);
+        color: var(--text-on-accent);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: lowercase;
+      }
+      .ngram-cmd-desc {
+        color: var(--text-muted);
+        font-size: 13px;
+      }
       .ngram-source-link {
         margin: 4px 0 8px;
       }
@@ -174,8 +193,13 @@ export class SearchView extends ItemView {
     }
 
     try {
-      const results = await this.client.search(query);
-      this.renderResults(results, query);
+      if (this.client.shouldUseCommands(query)) {
+        const results = await this.client.searchCommands(query);
+        this.renderCommandResults(results, query);
+      } else {
+        const results = await this.client.search(query);
+        this.renderResults(results, query);
+      }
     } catch (e) {
       this.resultsEl.empty();
       this.resultsEl.createDiv({
@@ -223,6 +247,58 @@ export class SearchView extends ItemView {
     }
   }
 
+  private async renderCommandResults(results: CommandResult[], query: string): Promise<void> {
+    this.resultsEl.empty();
+
+    if (results.length === 0) {
+      this.resultsEl.createDiv({
+        cls: "ngram-empty",
+        text: `No commands for "${query}"`,
+      });
+      return;
+    }
+
+    const docEl = this.resultsEl.createDiv({
+      cls: "ngram-assembled-doc markdown-rendered markdown-preview-view",
+    });
+
+    const countEl = docEl.createEl("em", { text: `${results.length} commands found` });
+    countEl.style.color = "var(--text-muted)";
+    countEl.style.fontSize = "12px";
+    docEl.createEl("hr");
+
+    for (const cmd of results) {
+      // Tool badge + description.
+      const headerEl = docEl.createDiv({ cls: "ngram-cmd-header" });
+      const badge = headerEl.createEl("span", {
+        text: cmd.tool,
+        cls: "ngram-cmd-badge",
+      });
+      if (cmd.description) {
+        headerEl.createEl("span", {
+          text: ` ${cmd.description}`,
+          cls: "ngram-cmd-desc",
+        });
+      }
+
+      // Code block.
+      const lang = cmd.language || "text";
+      const codeBlock = `\`\`\`${lang}\n${cmd.command}\n\`\`\``;
+      const codeEl = docEl.createDiv();
+      await MarkdownRenderer.render(this.app, codeBlock, codeEl, cmd.file_path, this);
+
+      // Source link.
+      const sourceEl = docEl.createEl("div", { cls: "ngram-source-link" });
+      const link = sourceEl.createEl("a", { text: `← ${cmd.parent_title}` });
+      link.addEventListener("click", (e: MouseEvent) => {
+        e.preventDefault();
+        this.app.workspace.openLinkText(cmd.file_path, "", false);
+      });
+
+      docEl.createEl("hr");
+    }
+  }
+
   async onClose(): Promise<void> {
     this.contentEl.empty();
   }
@@ -251,14 +327,14 @@ class SearchInfoModal extends Modal {
     syntaxEl.createEl("h3", { text: "Search Syntax" });
 
     const syntaxItems = [
-      ["kerberos", "full-text search across all notes"],
-      ["tool:nmap", "filter by tool"],
+      ["kerberos", "full-text search across all notes (full context)"],
+      ["tool:nmap", "commands FROM nmap (exact tool match)"],
+      ["nmap type:cmd", "commands MENTIONING nmap (fuzzy text search)"],
+      ["tool:nmap SYN scan", "nmap commands matching \"SYN scan\""],
       ["phase:recon", "filter by pentest phase"],
-      ["type:cmd", "commands only (no explanations)"],
-      ["tool:nmap type:cmd", "nmap commands only"],
       ["domain:active-directory", "filter by knowledge domain"],
       ["tag:privilege-escalation", "filter by tag"],
-      ["tool:nmap SYN scan", "combine filters with text query"],
+      ["type:cmd", "all commands (no explanations)"],
     ];
 
     const syntaxTable = syntaxEl.createEl("div", { cls: "ngram-syntax-table" });

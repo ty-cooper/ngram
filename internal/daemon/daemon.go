@@ -248,13 +248,14 @@ func IsRunning(vaultPath string) (bool, *Heartbeat) {
 	return true, hb
 }
 
-const composeContent = `services:
+func composeContent(bind string) string {
+	return fmt.Sprintf(`services:
   meilisearch:
     container_name: ngram-meilisearch
     image: getmeili/meilisearch:v1.40.0
     restart: unless-stopped
     ports:
-      - "127.0.0.1:7700:7700"
+      - "%s:7700:7700"
     volumes:
       - ngram_meilisearch_data:/meili_data
     environment:
@@ -263,28 +264,34 @@ const composeContent = `services:
 
 volumes:
   ngram_meilisearch_data:
-`
+`, bind)
+}
 
-// composeDir returns ~/.ngram/ for the embedded docker-compose.yml.
-// Persists across reboots (unlike /tmp/).
-func composeDir() string {
+// ngramDir returns ~/.ngram/, creating it if needed.
+func ngramDir() string {
 	home, _ := os.UserHomeDir()
 	dir := filepath.Join(home, ".ngram")
 	os.MkdirAll(dir, 0o755)
+	return dir
+}
+
+// writeCompose writes docker-compose.yml to ~/.ngram/ with the given bind address.
+func writeCompose(bind string) string {
+	dir := ngramDir()
 	path := filepath.Join(dir, "docker-compose.yml")
-	os.WriteFile(path, []byte(composeContent), 0o644)
+	os.WriteFile(path, []byte(composeContent(bind)), 0o644)
 	return dir
 }
 
 // StartMeilisearch runs docker compose up -d and waits for health.
-func StartMeilisearch(vaultPath string) error {
+func StartMeilisearch(vaultPath, bind string) error {
 	// Check Docker is available.
 	if err := exec.Command("docker", "info").Run(); err != nil {
 		return fmt.Errorf("Docker is not running. Start Docker Desktop and retry")
 	}
 
 	cmd := exec.Command("docker", "compose", "up", "-d")
-	cmd.Dir = composeDir()
+	cmd.Dir = writeCompose(bind)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -309,7 +316,7 @@ func StartMeilisearch(vaultPath string) error {
 // StopMeilisearch runs docker compose down.
 func StopMeilisearch(vaultPath string) error {
 	cmd := exec.Command("docker", "compose", "down")
-	cmd.Dir = composeDir()
+	cmd.Dir = ngramDir()
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

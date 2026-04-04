@@ -28,6 +28,46 @@ export interface FacetValues {
   [field: string]: string[];
 }
 
+// Filterable fields that can be used as key:value in search queries.
+const FILTER_FIELDS = new Set([
+  "tags", "tag", "domain", "phase", "tool", "content_type", "type", "box", "topic_cluster",
+]);
+
+// Parse "tags:ad-objects domain:active-directory kerberos" into
+// { textQuery: "kerberos", filters: ['tags = "ad-objects"', 'domain = "active-directory"'] }
+function parseQuery(raw: string): { textQuery: string; filters: string[]; useCommands: boolean } {
+  const parts = raw.trim().split(/\s+/);
+  const filters: string[] = [];
+  const textParts: string[] = [];
+  let useCommands = false;
+
+  for (const part of parts) {
+    const colonIdx = part.indexOf(":");
+    if (colonIdx > 0) {
+      let field = part.slice(0, colonIdx).toLowerCase();
+      const value = part.slice(colonIdx + 1);
+      // Normalize aliases.
+      if (field === "tag") field = "tags";
+      // type:cmd is a routing signal, not a filter.
+      if (field === "type" && value.toLowerCase() === "cmd") {
+        useCommands = true;
+        continue;
+      }
+      if (field === "type") field = "content_type";
+      // tool: filter implies commands index.
+      if (field === "tool") useCommands = true;
+      if (FILTER_FIELDS.has(field) && value) {
+        // Lowercase filter values for case-insensitive matching.
+        filters.push(`${field} = "${value.toLowerCase()}"`);
+        continue;
+      }
+    }
+    textParts.push(part);
+  }
+
+  return { textQuery: textParts.join(" "), filters, useCommands };
+}
+
 export class MeilisearchClient {
   private client: MeiliSearch;
   private indexName = "notes";
@@ -36,10 +76,17 @@ export class MeilisearchClient {
     this.client = new MeiliSearch({ host, apiKey });
   }
 
+  shouldUseCommands(query: string): boolean {
+    return parseQuery(query).useCommands;
+  }
+
   async search(query: string, limit = 20): Promise<NoteResult[]> {
     const index = this.client.index(this.indexName);
-    const results = await index.search(query, {
+    const { textQuery, filters } = parseQuery(query);
+    const filter = filters.length > 0 ? filters.join(" AND ") : undefined;
+    const results = await index.search(textQuery, {
       limit,
+      filter,
       attributesToRetrieve: [
         "id",
         "title",
@@ -63,10 +110,12 @@ export class MeilisearchClient {
     }));
   }
 
-  async searchCommands(query: string, filters: string[] = [], limit = 20): Promise<CommandResult[]> {
+  async searchCommands(query: string, extraFilters: string[] = [], limit = 20): Promise<CommandResult[]> {
     const index = this.client.index("commands");
-    const filter = filters.length > 0 ? filters.join(" AND ") : undefined;
-    const results = await index.search(query, {
+    const { textQuery, filters } = parseQuery(query);
+    const allFilters = [...filters, ...extraFilters];
+    const filter = allFilters.length > 0 ? allFilters.join(" AND ") : undefined;
+    const results = await index.search(textQuery, {
       limit,
       filter,
       attributesToRetrieve: [

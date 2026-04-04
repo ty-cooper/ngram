@@ -67,7 +67,7 @@ func upRun(cmd *cobra.Command, args []string) error {
 
 	// Start Meilisearch.
 	msOK := false
-	if err := daemon.StartMeilisearch(c.VaultPath); err != nil {
+	if err := daemon.StartMeilisearch(c.VaultPath, c.Meilisearch.Bind); err != nil {
 		fmt.Printf("  %-14s ✗ %v\n", "meilisearch:", err)
 	} else {
 		fmt.Printf("  %-14s %s ✓\n", "meilisearch:", c.Meilisearch.Host)

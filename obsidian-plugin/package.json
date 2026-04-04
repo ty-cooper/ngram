@@ -1,10 +1,11 @@
 {
   "name": "ngram-search",
-  "version": "1.1.0",
+  "version": "1.1.9",
   "private": true,
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "node esbuild.config.mjs production"
+    "build": "node bump-version.mjs && node esbuild.config.mjs production",
+    "deploy": "npm run build && cp main.js manifest.json ~/.obsidian.ngram/.obsidian/plugins/ngram-search/"
   },
   "dependencies": {
     "meilisearch": "^0.48.0"

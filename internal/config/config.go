@@ -28,6 +28,7 @@ type APIConfig struct {
 type MeilisearchConfig struct {
 	Host   string `mapstructure:"host"`
 	APIKey string `mapstructure:"api_key"`
+	Bind   string `mapstructure:"bind"`
 }
 
 func Load() (*Config, error) {
@@ -43,6 +44,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("model", "cloud")
 	viper.SetDefault("meilisearch.host", "http://127.0.0.1:7700")
 	viper.SetDefault("meilisearch.api_key", "")
+	viper.SetDefault("meilisearch.bind", "127.0.0.1")
 	viper.SetDefault("api.max_calls_per_day", 100)
 	viper.SetDefault("api.warn_at_percent", 80)
 

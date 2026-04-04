@@ -144,9 +144,9 @@ func ParseNoteFile(path, vaultPath string) (*NoteDocument, error) {
 
 	relPath, _ := filepath.Rel(vaultPath, path)
 
-	id := fm.ID
+	id := sanitizeID(fm.ID)
 	if id == "" {
-		id = strings.TrimSuffix(filepath.Base(path), ".md")
+		id = sanitizeID(strings.TrimSuffix(filepath.Base(path), ".md"))
 	}
 
 	var captured int64
@@ -174,6 +174,23 @@ func ParseNoteFile(path, vaultPath string) (*NoteDocument, error) {
 		FilePath:    relPath,
 		Captured:    captured,
 	}, nil
+}
+
+// sanitizeID replaces characters invalid for Meilisearch document IDs
+// (anything other than a-z A-Z 0-9 - _) with hyphens and collapses runs.
+func sanitizeID(id string) string {
+	var b strings.Builder
+	prev := false
+	for _, r := range id {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+			prev = false
+		} else if !prev {
+			b.WriteByte('-')
+			prev = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 // WalkVault finds all indexable .md files in the vault, excluding system directories.

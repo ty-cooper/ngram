@@ -64,7 +64,7 @@ func ExtractCommands(noteID, noteTitle, body string, meta CommandMeta) []Command
 			ID:           fmt.Sprintf("%s-cmd-%d", noteID, cmdIdx),
 			ParentNoteID: noteID,
 			ParentTitle:  noteTitle,
-			Tool:         tool,
+			Tool:         strings.ToLower(tool),
 			Language:     lang,
 			Command:      command,
 			Description:  desc,

@@ -29,6 +29,9 @@ export default class NgramSearchPlugin extends Plugin {
       callback: () => this.activateView(),
     });
 
+    // Ribbon icon for mobile.
+    this.addRibbonIcon("search", "Ngram Search", () => this.activateView());
+
     // Settings tab.
     this.addSettingTab(new NgramSearchSettingTab(this.app, this));
   }
