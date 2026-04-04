@@ -130,6 +130,9 @@ func (w *Watcher) drainExisting(ctx context.Context, inboxDir string) {
 
 	// After inbox is drained, process any parked revisit notes.
 	w.Processor.DrainRevisit(ctx)
+
+	// Reindex after inbox drain.
+	w.reindexIfEmpty()
 }
 
 func (w *Watcher) debouncedWatch(ctx context.Context, watcher *fsnotify.Watcher) error {
@@ -196,11 +199,44 @@ func (w *Watcher) debouncedWatch(ctx context.Context, watcher *fsnotify.Watcher)
 						if err := w.Processor.Process(noteCtx, p); err != nil {
 							log.Printf("error: process %s: %v", filepath.Base(p), err)
 						}
+						w.reindexIfEmpty()
 					}(path)
 				}
 			}
 		}
 	}
+}
+
+// reindexIfEmpty triggers a full reindex when _inbox/ and _processing/ are both empty.
+func (w *Watcher) reindexIfEmpty() {
+	if !w.isInboxEmpty() {
+		return
+	}
+	if w.Processor.SearchClient == nil {
+		return
+	}
+	log.Println("ngram: inbox empty — running reindex")
+	notes, cmds, err := w.Processor.SearchClient.FullReindex(w.VaultPath)
+	if err != nil {
+		log.Printf("warn: reindex failed: %v", err)
+		return
+	}
+	log.Printf("ngram: reindexed %d notes, %d commands", notes, cmds)
+}
+
+func (w *Watcher) isInboxEmpty() bool {
+	for _, dir := range []string{"_inbox", "_processing"} {
+		entries, err := os.ReadDir(filepath.Join(w.VaultPath, dir))
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !strings.HasPrefix(e.Name(), ".") {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // imageExtensions lists file extensions treated as images for vision processing.

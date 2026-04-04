@@ -608,6 +608,66 @@ func (c *Client) ListAllIDs() (map[string]bool, error) {
 	return ids, nil
 }
 
+// FullReindex rebuilds the notes and commands indexes from all vault files.
+func (c *Client) FullReindex(vaultPath string) (int, int, error) {
+	if err := c.EnsureIndex(); err != nil {
+		return 0, 0, fmt.Errorf("ensure notes index: %w", err)
+	}
+	if err := c.EnsureCommandsIndex(); err != nil {
+		return 0, 0, fmt.Errorf("ensure commands index: %w", err)
+	}
+
+	files, err := WalkVault(vaultPath)
+	if err != nil {
+		return 0, 0, fmt.Errorf("walk vault: %w", err)
+	}
+	if len(files) == 0 {
+		return 0, 0, nil
+	}
+
+	var docs []NoteDocument
+	var cmds []CommandDocument
+	for _, f := range files {
+		doc, err := ParseNoteFile(f, vaultPath)
+		if err != nil {
+			continue
+		}
+		docs = append(docs, *doc)
+		cmds = append(cmds, ExtractCommands(doc.ID, doc.Title, doc.Body, CommandMeta{
+			Phase:    doc.Phase,
+			Domain:   doc.Domain,
+			Tags:     doc.Tags,
+			FilePath: doc.FilePath,
+		})...)
+	}
+
+	batchSize := 100
+	for i := 0; i < len(docs); i += batchSize {
+		end := i + batchSize
+		if end > len(docs) {
+			end = len(docs)
+		}
+		if err := c.IndexNotes(docs[i:end]); err != nil {
+			return 0, 0, fmt.Errorf("index notes batch: %w", err)
+		}
+	}
+
+	if len(cmds) > 0 {
+		c.ClearCommandsIndex()
+		for i := 0; i < len(cmds); i += batchSize {
+			end := i + batchSize
+			if end > len(cmds) {
+				end = len(cmds)
+			}
+			if err := c.IndexCommands(cmds[i:end]); err != nil {
+				return 0, 0, fmt.Errorf("index commands batch: %w", err)
+			}
+		}
+	}
+
+	return len(docs), len(cmds), nil
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
