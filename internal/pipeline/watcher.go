@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -19,6 +20,8 @@ type Watcher struct {
 	Processor     *Processor
 	MaxConcurrent int
 	sem           chan struct{}
+	reindexTimer  *time.Timer
+	reindexMu     sync.Mutex
 }
 
 // Start begins watching _inbox/ for new files. Blocks until ctx is cancelled.
@@ -45,7 +48,7 @@ func (w *Watcher) Start(ctx context.Context) error {
 				return ctx.Err()
 			}
 			backoff *= 2
-			if backoff > 30*time.Second {
+			if backoff > 15*time.Second {
 				backoff = 30 * time.Second
 			}
 			continue
@@ -132,7 +135,7 @@ func (w *Watcher) drainExisting(ctx context.Context, inboxDir string) {
 	w.Processor.DrainRevisit(ctx)
 
 	// Reindex after inbox drain.
-	w.reindexIfEmpty()
+	w.scheduleReindex()
 }
 
 func (w *Watcher) debouncedWatch(ctx context.Context, watcher *fsnotify.Watcher) error {
@@ -199,7 +202,7 @@ func (w *Watcher) debouncedWatch(ctx context.Context, watcher *fsnotify.Watcher)
 						if err := w.Processor.Process(noteCtx, p); err != nil {
 							log.Printf("error: process %s: %v", filepath.Base(p), err)
 						}
-						w.reindexIfEmpty()
+						w.scheduleReindex()
 					}(path)
 				}
 			}
@@ -207,21 +210,34 @@ func (w *Watcher) debouncedWatch(ctx context.Context, watcher *fsnotify.Watcher)
 	}
 }
 
-// reindexIfEmpty triggers a full reindex when _inbox/ and _processing/ are both empty.
-func (w *Watcher) reindexIfEmpty() {
-	if !w.isInboxEmpty() {
-		return
-	}
+// scheduleReindex debounces reindex calls — waits 30s after inbox empties
+// before triggering. Resets the timer if called again within the window.
+func (w *Watcher) scheduleReindex() {
 	if w.Processor.SearchClient == nil {
 		return
 	}
-	log.Println("ngram: inbox empty — running reindex")
-	notes, cmds, err := w.Processor.SearchClient.FullReindex(w.VaultPath)
-	if err != nil {
-		log.Printf("warn: reindex failed: %v", err)
+	if !w.isInboxEmpty() {
 		return
 	}
-	log.Printf("ngram: reindexed %d notes, %d commands", notes, cmds)
+
+	w.reindexMu.Lock()
+	defer w.reindexMu.Unlock()
+
+	if w.reindexTimer != nil {
+		w.reindexTimer.Stop()
+	}
+	w.reindexTimer = time.AfterFunc(15*time.Second, func() {
+		if !w.isInboxEmpty() {
+			return
+		}
+		log.Println("ngram: inbox empty for 15s — running reindex")
+		notes, cmds, err := w.Processor.SearchClient.FullReindex(w.VaultPath)
+		if err != nil {
+			log.Printf("warn: reindex failed: %v", err)
+			return
+		}
+		log.Printf("ngram: reindexed %d notes, %d commands", notes, cmds)
+	})
 }
 
 func (w *Watcher) isInboxEmpty() bool {
