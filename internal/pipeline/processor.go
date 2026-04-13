@@ -103,10 +103,12 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 	}
 
 	var notes []*StructuredNote
+	discarded := 0
 	for i, chunk := range chunks {
 		chunkNotes, err := p.structureWithRetry(ctx, chunk, 2)
 		if err != nil {
 			if errors.Is(err, ErrDiscard) {
+				discarded++
 				continue // skip empty chunks
 			}
 			if len(chunks) > 1 {
@@ -120,14 +122,20 @@ func (p *Processor) Process(ctx context.Context, inboxPath string) error {
 		notes = append(notes, chunkNotes...)
 	}
 	if len(notes) == 0 {
-		// Log what was lost.
+		// If every chunk was explicitly discarded by the LLM, archive instead of
+		// revisiting — revisit would just bounce it in an infinite loop.
+		if discarded == len(chunks) {
+			log.Printf("ngram: discarded %s — no extractable knowledge", filepath.Base(procPath))
+			return p.archiveRaw(procPath)
+		}
+
+		// Real failures (API errors, etc.) — park for retry.
 		preview := string(raw)
 		if len(preview) > 200 {
 			preview = preview[:200] + "..."
 		}
 		log.Printf("ngram: all chunks failed for %s — moving to _revisit/. Preview: %s", filepath.Base(procPath), preview)
 
-		// Move to _revisit/ for manual retry instead of discarding.
 		revisitDir := filepath.Join(p.VaultPath, "_revisit")
 		os.MkdirAll(revisitDir, 0o755)
 		dest := filepath.Join(revisitDir, filepath.Base(procPath))

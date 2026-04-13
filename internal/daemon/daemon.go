@@ -231,7 +231,13 @@ func ReadHeartbeat(vaultPath string) (*Heartbeat, error) {
 	return &hb, nil
 }
 
-// IsRunning checks if a daemon is currently running by reading the heartbeat.
+// RemoveHeartbeat deletes the heartbeat file (used to clean up stale state).
+func RemoveHeartbeat(vaultPath string) {
+	os.Remove(filepath.Join(vaultPath, "_meta", "heartbeat.json"))
+}
+
+// IsRunning checks if a daemon is currently running by reading the heartbeat
+// and verifying the process is alive.
 func IsRunning(vaultPath string) (bool, *Heartbeat) {
 	hb, err := ReadHeartbeat(vaultPath)
 	if err != nil {
@@ -243,6 +249,12 @@ func IsRunning(vaultPath string) (bool, *Heartbeat) {
 	}
 	// Stale if older than 120 seconds.
 	if time.Since(last) > 120*time.Second {
+		return false, hb
+	}
+	// Verify the process is actually alive (handles kill -9 / crash).
+	if err := syscall.Kill(hb.PID, 0); err != nil {
+		// Process is gone — clean up stale heartbeat.
+		os.Remove(filepath.Join(vaultPath, "_meta", "heartbeat.json"))
 		return false, hb
 	}
 	return true, hb

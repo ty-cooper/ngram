@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"syscall"
 	"time"
@@ -37,9 +38,15 @@ func downRun(cmd *cobra.Command, args []string) error {
 
 	// Send SIGTERM.
 	if err := syscall.Kill(hb.PID, syscall.SIGTERM); err != nil {
-		return fmt.Errorf("send SIGTERM to PID %d: %w", hb.PID, err)
+		if errors.Is(err, syscall.ESRCH) {
+			fmt.Printf("PID %d already gone — cleaning up stale state\n", hb.PID)
+			daemon.RemoveHeartbeat(c.VaultPath)
+		} else {
+			return fmt.Errorf("send SIGTERM to PID %d: %w", hb.PID, err)
+		}
+	} else {
+		fmt.Printf("✓ sent SIGTERM to PID %d\n", hb.PID)
 	}
-	fmt.Printf("✓ sent SIGTERM to PID %d\n", hb.PID)
 
 	// Wait for process to exit (up to 10s).
 	for i := 0; i < 20; i++ {
